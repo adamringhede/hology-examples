@@ -1,0 +1,15 @@
+{
+  "name": "Basic Gray",
+  "path": "",
+  "type": "material",
+  "collisionDetection": true,
+  "material": {
+    "type": "standard",
+    "params": {
+      "metalness": 0,
+      "opacity": 1,
+      "color": "#a3a3a3"
+    }
+  },
+  "id": "hahbj5tm3t"
+}
