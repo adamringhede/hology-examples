@@ -19,6 +19,7 @@ enum InputAction {
   rotate,
   rotateCamera,
   zoomCamera,
+  shoot,
 }
 
 @Service()
@@ -27,6 +28,7 @@ class PlayerController {
   private character: CharacterActor
 
   public start() {
+    // TODO Add a mouse click feature
     this.inputService.setKeybind(InputAction.jump, new Keybind(" "))
     this.inputService.setKeybind(InputAction.sprint, new Keybind("Shift"))
     this.inputService.setKeybind(InputAction.moveForward, new Keybind("w"))
@@ -75,7 +77,15 @@ class PlayerController {
       InputAction.zoomCamera,
       this.character.thirdPartyCamera.zoomInput.increment
     )
+
+    document.addEventListener("mousedown", (event) => {
+      if (event.button === leftMouseButton) {
+        this.character.shoot()
+      }
+    })
   }
 }
+
+const leftMouseButton = 0
 
 export default PlayerController

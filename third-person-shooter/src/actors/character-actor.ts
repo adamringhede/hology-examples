@@ -12,10 +12,12 @@ import {
   ThirdPartyCameraComponent,
 } from "@hology/core/gameplay/actors"
 import { Mesh, BoxGeometry, MeshStandardMaterial, Vector3 } from "three"
+import ShootingComponent from "./shooting-component"
 
 @Actor()
 class CharacterActor extends BaseActor {
   private physicsSystem = inject(PhysicsSystem)
+  private shooting = attach(ShootingComponent)
   private height = 2.5
   private radius = 0.5
   private isCrouching = false
@@ -38,6 +40,11 @@ class CharacterActor extends BaseActor {
 
   constructor() {
     super()
+  }
+
+  shoot() {
+    this.shooting.camera = this.thirdPartyCamera.camera.instance
+    this.shooting.trigger()
   }
 
   moveTo(position: Vector3) {
