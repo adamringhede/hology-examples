@@ -10,13 +10,13 @@
   },
   "dependencies": {
     "@babel/plugin-proposal-decorators": "^7.20.5",
-    "@hology/core": "^0.0.6",
     "@types/three": "^0.138.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "three": "^0.138.3"
   },
   "devDependencies": {
+    "@hology/core": "file:../../hology/packages/core/hology-core-0.0.8.tgz",
     "@types/react": "^18.0.24",
     "@types/react-dom": "^18.0.8",
     "@vitejs/plugin-react": "^2.2.0",
