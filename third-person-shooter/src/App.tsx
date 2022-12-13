@@ -53,13 +53,13 @@ class Game {
     this.start()
   }
 
-  start() {
-    this.physics.showDebug = false
+  async start() {
+    this.physics.showDebug = true
 
     const spawnPoint = this.world.findActorByType(SpawnPoint)
     spawnPoint.position.y += 2
 
-    const character = this.world.spawnActor(CharacterActor)
+    const character = await this.world.spawnActor(CharacterActor)
     character.moveTo(spawnPoint.position)
 
     this.inputService.start()

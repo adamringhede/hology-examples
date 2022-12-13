@@ -35,26 +35,17 @@ class BallActor extends BaseActor {
 
   mesh = attach(MeshComponent, {
     mesh: new ShapeMeshInstance(
-      new SphereGeometry(this.radius, 20, 10),
+      //new SphereGeometry(this.radius, 20, 10),
+      new BoxGeometry(this.radius * 2, this.radius * 2, this.radius * 2),
       new MeshStandardMaterial({ color: 0xeff542 }),
       new SphereCollisionShape(this.radius)
     ),
     mass: 1,
-    bodyType: 1,
+    bodyType: PhysicsBodyType.dynamic,
   })
 
   constructor() {
     super()
-  }
-
-  // TODO Remove this when it is possible
-  public setupPhysics() {
-    this.physicsSystem.removeActor(this)
-    this.physicsSystem.addActor(this, [new SphereCollisionShape(this.radius)], {
-      isTrigger: false,
-      mass: 1,
-      type: 1,
-    })
   }
 
   public shoot(direction: Vector3) {
@@ -64,6 +55,9 @@ class BallActor extends BaseActor {
   }
 
   moveTo(position: Vector3) {
+    // TODO Make changin position with physics easier maybe
+    // Maybe for kinematic actors, always copy the transform from the actor.
+    // Also need to handle dynamic bodies. 
     this.container.position.copy(position)
     this.physicsSystem.updateActorTransform(this)
   }

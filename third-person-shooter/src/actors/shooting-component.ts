@@ -21,6 +21,10 @@ import BallActor from "./ball-actor"
 const raycaster = new Raycaster()
 const screenCenter = { x: 0, y: 0 }
 
+// Reuse objects rather than creating new instances every time they are used
+const ballForceVec = new Vector3()
+const ballOriginVec = new Vector3()
+
 @Component()
 class ShootingComponent extends ActorComponent {
   private physics = inject(PhysicsSystem)
@@ -73,18 +77,16 @@ class ShootingComponent extends ActorComponent {
     //this.addHitMarker(result)
   }
 
-  private spawnBall(start: Vector3, direction: Vector3) {
-    // TODO Have a nicer way of calculating variables without ugly tmp variables
-
-    const from = _vec3Tmp.addVectors(start, direction.clone().multiplyScalar(4))
-    const ball = this.actorFactory.create(BallActor)
-    this.world.addActor(ball, from)
-    ball.moveTo(from)
+  private async spawnBall(start: Vector3, direction: Vector3) {
+    ballOriginVec.addVectors(start, direction.clone().multiplyScalar(4))
+    const ball = await this.actorFactory.create(BallActor)
+    this.world.addActor(ball, ballOriginVec)
+    ball.moveTo(ballOriginVec)
+    ballForceVec.copy(direction).multiplyScalar(this.shootingStrength)
     this.physics.applyImpulse(
       ball,
-      _vec3Tmp2.copy(direction).multiplyScalar(this.shootingStrength)
+      ballForceVec
     )
-    // Add force to ball
   }
 
   private addHitMarker(result: RayTestResult) {
