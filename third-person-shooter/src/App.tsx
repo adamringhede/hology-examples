@@ -53,7 +53,7 @@ class Game {
   }
 
   async start() {
-    this.physics.showDebug = true
+    this.physics.showDebug = false
 
     const spawnPoint = this.world.findActorByType(SpawnPoint)
     spawnPoint.position.y += 2

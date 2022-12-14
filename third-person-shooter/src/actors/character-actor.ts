@@ -31,7 +31,7 @@ class CharacterActor extends BaseActor {
   private physicsSystem = inject(PhysicsSystem)
   private shooting = attach(ShootingComponent)
   private height = 2.5
-  private radius = 0.5
+  private radius = 1.6
   private isCrouching = false
 
   private viewController = inject(ViewController)
@@ -51,26 +51,19 @@ class CharacterActor extends BaseActor {
     super()
   }
 
-  private async getClip(file: string, loader: Loader, name?: string) {
-    const group = await loader.loadAsync(file)
-    const clips = group.animations as AnimationClip[]
-    if (name != null) {
-      return clips.find(c => c.name === 'name')
-    }
-    return clips[0]
-  }
 
   private async createGraph(mesh: Object3D) {
     const loader = new FBXLoader()
 
-    // TODO Should not need to wait for these
-    const runClip = await this.getClip('assets/rifle run.fbx', loader)
-    const walkingClip = await this.getClip('assets/walking.fbx', loader)
-    const walkingBackwardsClip = await this.getClip('assets/walking backwards.fbx', loader)
-    const idleClip = await this.getClip('assets/rifle aiming idle.fbx', loader)
-    const startWalkingClip = await this.getClip('assets/start walking.fbx', loader)
-    const jumpClip = await this.getClip('assets/jump forward.fbx', loader)
-
+    const clips = await loadClips(loader, {
+      run: 'assets/rifle run.fbx',
+      walking: 'assets/rifle walking.fbx',
+      walkingBackwards: 'assets/walking backwards.fbx',
+      idle: 'assets/rifle aiming idle.fbx',
+      startWalking: 'assets/start walking.fbx',
+      jump: 'assets/jump forward.fbx',
+      falling: 'assets/falling idle.fbx',
+    })
 
     const rootBone = mesh.children.find(c => c instanceof Bone) as Bone
 
@@ -140,18 +133,21 @@ class CharacterActor extends BaseActor {
           case MovementMode.falling:
             if (this.movement.pressedJump) {
               if (!wasJumping) {
-                play(jumpClip, true)
+                //play(jumpClip, true)
+                //currentAction.timeScale = 1
                 /**
                  * The jump animation should be slowed down so it plays until the character reaches its apex.
                  * 
                  * Alternatively, let the animation control the actor position using root motion. 
                  * To control the jump height, change the jump animation.
                  * 
-                 */
-                if (animationEnded) {
-                  // play looping falling animation
-                }
+                 */ 
               }
+              if (animationEnded) {
+                // play looping falling animation
+              }
+              play(clips.falling)
+
               /**
                * 
                */
@@ -159,20 +155,21 @@ class CharacterActor extends BaseActor {
             break
           case MovementMode.walking:
             if (this.movement.directionInput.vertical < 0) {
-              play(walkingBackwardsClip, true)
-              updateTimescale(walkingBackwardsClip)
+              play(clips.walkingBackwards, true)
+              updateTimescale(clips.walkingBackwards)
             } else if (this.movement.directionInput.vertical > 0) {
               if (this.movement.isSprinting) {
                 // maybe based it on speed instead
-                play(runClip, true)
-                updateTimescale(runClip)
+                play(clips.run, true)
+                updateTimescale(clips.run)
               } else {
+                // TODO Need to support blending multiple movement actions to strafe in a specific direction
                 if (wasWalking) {
-                  play(walkingClip, true)
-                  updateTimescale(walkingClip)
+                  play(clips.walking, true)
+                  updateTimescale(clips.walking)
                 } else {
-                  play(startWalkingClip, true)
-                  updateTimescale(startWalkingClip)
+                  play(clips.startWalking, true)
+                  updateTimescale(clips.startWalking)
                   if (animationEnded) {
                     wasWalking = true
                   }
@@ -182,9 +179,10 @@ class CharacterActor extends BaseActor {
                 }
               }
             } else {
-              play(idleClip)
+              play(clips.idle)
               currentAction.timeScale = 1
               wasWalking = false
+              wasJumping = false
             }
             break;
         }
@@ -293,3 +291,17 @@ const makeClipInPlace = memoize(clip => clip.uuid, (clip: AnimationClip, rootBon
   copy.uuid = clip.uuid
   return copy
 })
+
+async function getClip(file: string, loader: Loader, name?: string) {
+  const group = await loader.loadAsync(file)
+  const clips = group.animations as AnimationClip[]
+  if (name != null) {
+    return clips.find(c => c.name === 'name')
+  }
+  return clips[0]
+}
+
+async function loadClips<T extends {[name: string]: string}>(loader: Loader, paths: T): Promise<{[Property in keyof T]: AnimationClip}>  {
+  const entries = await Promise.all(Object.entries(paths).map(([name, path]) => Promise.all([name, getClip(path, loader)])))
+  return Object.fromEntries(entries) as {[Property in keyof T]: AnimationClip}
+}
