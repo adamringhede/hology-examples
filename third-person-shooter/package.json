@@ -17,7 +17,7 @@
     "three-stdlib": "^2.20.4"
   },
   "devDependencies": {
-    "@hology/core": "file:../../hology/packages/core/hology-core-0.0.8.tgz",
+    "@hology/core": "file:../../hology/packages/core",
     "@types/react": "^18.0.24",
     "@types/react-dom": "^18.0.8",
     "@vitejs/plugin-react": "^2.2.0",
