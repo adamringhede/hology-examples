@@ -19,6 +19,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FBXLoader } from "../three/FBXLoader";
 
 import ShootingComponent from "./shooting-component"
+import { AnimationState, AnimationStateMachine } from '../animation/anim-sm';
 
 enum MovementMode {
   walking = 0,
@@ -127,7 +128,7 @@ class CharacterActor extends BaseActor {
         endAction.setEffectiveTimeScale( 1 );
         endAction.setEffectiveWeight( 1 );
         endAction.time = 0.0
-        startAction.crossFadeTo(endAction, 0.3, true)
+        startAction.crossFadeTo(endAction, 0.2, true)
       } else {
         mixer.stopAllAction()
         currentAction = mixer.clipAction( clip );
@@ -141,10 +142,31 @@ class CharacterActor extends BaseActor {
       currentAction.timeScale = clip.duration / getDisplacement(clip) * this.movement.horizontalSpeed
     }
 
-    let wasWalking = false
-    let wasJumping = false
     let currentActionLastTime = 0
     let animationEnded = false
+
+    const makeSm = () => {
+
+      const grounded = new AnimationState(clips.idle).named("grounded")
+      const walk = grounded.createChild(null, () => this.movement.horizontalSpeed > 0 && this.movement.mode == MovementMode.walking).named("walk")
+
+      const walkForward = walk.createChild(clips.walking, () => this.movement.directionInput.vertical > 0).named("walk forward")
+      walkForward.createChild(clips.walkForwardLeft, () => this.movement.directionInput.horizontal < 0)
+      walkForward.createChild(clips.walkForwardRight, () => this.movement.directionInput.horizontal > 0)
+
+      walk.createChild(clips.walkingBackwards, () => this.movement.directionInput.vertical < 0)
+
+      const strafe = walk.createChild(null, () => this.movement.directionInput.vertical == 0).named("abstract strafe")
+      strafe.createChild(clips.strafeLeft, () => this.movement.directionInput.horizontal < 0)
+      strafe.createChild(clips.strafeRight, () => this.movement.directionInput.horizontal > 0)
+      
+      const fall = new AnimationState(clips.falling).named("fall")
+      grounded.transitionsBetween(fall, () => this.movement.mode === MovementMode.falling)
+
+      return new AnimationStateMachine(grounded)
+    }
+
+    const sm = makeSm()
 
     return {
       update: (deltaTime: number) => {
@@ -153,80 +175,16 @@ class CharacterActor extends BaseActor {
           currentActionLastTime = currentAction.time
         }
 
-        // If jumped, then play jump animation
-        // If jump animation finish, check if grounded to determine if falling
-      
-        switch (this.movement.mode) {
-          case MovementMode.falling:
-            if (this.movement.pressedJump) {
-              if (!wasJumping) {
-                //play(jumpClip, true)
-                //currentAction.timeScale = 1
-                /**
-                 * The jump animation should be slowed down so it plays until the character reaches its apex.
-                 * 
-                 * Alternatively, let the animation control the actor position using root motion. 
-                 * To control the jump height, change the jump animation.
-                 * 
-                 */ 
-              }
-              if (animationEnded) {
-                // play looping falling animation
-              }
-              play(clips.falling)
-            }
-            break
-          case MovementMode.walking:
-            if (this.movement.directionInput.vertical < 0) {
-              play(clips.walkingBackwards, true)
-              updateTimescale(clips.walkingBackwards)
-            } else if (this.movement.directionInput.vertical > 0) {
-              if (this.movement.isSprinting) {
-                // maybe based it on speed instead
-                play(clips.run, true)
-                updateTimescale(clips.run)
-              } else {
-                // TODO Need to support blending multiple movement actions to strafe in a specific direction
-                if (wasWalking || true) {
-                  let walkingClip: AnimationClip = clips.walking
-                  if (this.movement.directionInput.horizontal < 0) {
-                    walkingClip = clips.walkForwardLeft
-                  } else if (this.movement.directionInput.horizontal > 0) {
-                    walkingClip = clips.walkForwardRight
-                  }
-                  play(walkingClip, true)
-                  updateTimescale(walkingClip)
-                } else {
-                  play(clips.startWalking, true)
-                  updateTimescale(clips.startWalking)
-                  if (animationEnded) {
-                    wasWalking = true
-                  }
-                  //console.log(currentAction.getClip().duration)
-                  // play one time animation
-                  // When that animation is done, 
-                }
-              }
-            } else if (this.movement.directionInput.horizontal != 0) {
-              let walkingClip: AnimationClip = clips.idle
-              if (this.movement.directionInput.horizontal < 0) {
-                walkingClip = clips.strafeLeft
-              } else if (this.movement.directionInput.horizontal > 0) {
-                walkingClip = clips.strafeRight
-              }
-              play(walkingClip, true)
-              updateTimescale(walkingClip)
-            } else {
-              play(clips.idle)
-              currentAction.timeScale = 1
-              wasWalking = false
-              wasJumping = false
-            }
-            break;
+        sm.step()
+        if (sm.current.clip) {
+          // Whether it is in place or not should probably be handled by the clip
+          play(sm.current.clip, true)
+        } else {
+          console.log("clip is null", sm.current.name)
         }
         mixer.update(deltaTime)
         if (upperBodyAction.enabled) {
-          upperBodyMixer.update(deltaTime)
+          //upperBodyMixer.update(deltaTime)
         }
         
       }
@@ -255,7 +213,7 @@ class CharacterActor extends BaseActor {
 
     const graph = await this.createGraph(mesh)
 
-    this.physicsSystem.afterStep.subscribe(deltaTime => {
+    this.viewController.tick.subscribe(deltaTime => {
       graph.update(deltaTime)
     })
 
