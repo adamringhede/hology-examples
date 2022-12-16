@@ -35,8 +35,8 @@ class BallActor extends BaseActor {
 
   mesh = attach(MeshComponent, {
     mesh: new ShapeMeshInstance(
-      //new SphereGeometry(this.radius, 20, 10),
-      new BoxGeometry(this.radius * 2, this.radius * 2, this.radius * 2),
+      new SphereGeometry(this.radius, 20, 10),
+      //new BoxGeometry(this.radius * 2, this.radius * 2, this.radius * 2),
       new MeshStandardMaterial({ color: 0xeff542 }),
       new SphereCollisionShape(this.radius)
     ),

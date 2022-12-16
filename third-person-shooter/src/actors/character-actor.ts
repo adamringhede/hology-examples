@@ -12,6 +12,8 @@ import {
   MeshComponent,
   ThirdPartyCameraComponent,
 } from "@hology/core/gameplay/actors"
+import { AnimationActionLoopStyles, LoopOnce } from "three";
+import { MeshBasicMaterial } from "three";
 import { Mesh, BoxGeometry, MeshStandardMaterial, Vector3, AnimationMixer, AnimationClip, Bone, Vector2, Loader, Object3D, AnimationAction } from "three"
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FBXLoader } from "../three/FBXLoader";
@@ -58,17 +60,44 @@ class CharacterActor extends BaseActor {
     const clips = await loadClips(loader, {
       run: 'assets/rifle run.fbx',
       walking: 'assets/rifle walking.fbx',
+      walkForwardLeft: 'assets/walk forward left.fbx',
+      walkForwardRight: 'assets/walk forward right.fbx',
       walkingBackwards: 'assets/walking backwards.fbx',
       idle: 'assets/rifle aiming idle.fbx',
       startWalking: 'assets/start walking.fbx',
       jump: 'assets/jump forward.fbx',
       falling: 'assets/falling idle.fbx',
+      strafeLeft: 'assets/strafe (2).fbx',
+      strafeRight: 'assets/strafe.fbx',
+      reload: 'assets/reload.fbx'
     })
 
     const rootBone = mesh.children.find(c => c instanceof Bone) as Bone
+    if (rootBone == null) {
+      throw new Error("No root bone found in mesh")
+    }
 
     const mixer = new AnimationMixer(mesh)
     let currentAction: AnimationAction
+
+    const upperBone = findBone(mesh, 'mixamorigSpine2')
+    const remainingBones = new Set<string>()
+    upperBone.traverse(b => {
+      remainingBones.add(b.name)
+    })
+    clips.reload.tracks = clips.reload.tracks.filter(t => remainingBones.has(t.name.split('.')[0]))
+    const upperBodyMixer = new AnimationMixer(mesh)
+    const upperBodyAction = upperBodyMixer.clipAction(clips.reload)
+    upperBodyAction.clampWhenFinished = true
+    upperBodyAction.setLoop(LoopOnce, 0)
+    upperBodyAction.play()
+    setInterval(() => {
+      upperBodyAction.play()
+    }, 6000)
+  
+    upperBodyMixer.addEventListener('finished', (e) => {
+      upperBodyAction.stop()
+    })
 
     const getDisplacement = memoize(clip => clip.uuid, (clip: AnimationClip): number => {
         const rootTrack = clip.tracks.find(t => t.name === `${rootBone.name}.position`)
@@ -92,9 +121,7 @@ class CharacterActor extends BaseActor {
 
       if (currentAction) {
         const startAction = currentAction
-        //startAction.clampWhenFinished = false
         const endAction = currentAction = mixer.clipAction( clip );
-        //endAction.fadeIn(fadeIn)
         endAction.play()
         endAction.enabled = true
         endAction.setEffectiveTimeScale( 1 );
@@ -147,10 +174,6 @@ class CharacterActor extends BaseActor {
                 // play looping falling animation
               }
               play(clips.falling)
-
-              /**
-               * 
-               */
             }
             break
           case MovementMode.walking:
@@ -164,9 +187,15 @@ class CharacterActor extends BaseActor {
                 updateTimescale(clips.run)
               } else {
                 // TODO Need to support blending multiple movement actions to strafe in a specific direction
-                if (wasWalking) {
-                  play(clips.walking, true)
-                  updateTimescale(clips.walking)
+                if (wasWalking || true) {
+                  let walkingClip: AnimationClip = clips.walking
+                  if (this.movement.directionInput.horizontal < 0) {
+                    walkingClip = clips.walkForwardLeft
+                  } else if (this.movement.directionInput.horizontal > 0) {
+                    walkingClip = clips.walkForwardRight
+                  }
+                  play(walkingClip, true)
+                  updateTimescale(walkingClip)
                 } else {
                   play(clips.startWalking, true)
                   updateTimescale(clips.startWalking)
@@ -178,6 +207,15 @@ class CharacterActor extends BaseActor {
                   // When that animation is done, 
                 }
               }
+            } else if (this.movement.directionInput.horizontal != 0) {
+              let walkingClip: AnimationClip = clips.idle
+              if (this.movement.directionInput.horizontal < 0) {
+                walkingClip = clips.strafeLeft
+              } else if (this.movement.directionInput.horizontal > 0) {
+                walkingClip = clips.strafeRight
+              }
+              play(walkingClip, true)
+              updateTimescale(walkingClip)
             } else {
               play(clips.idle)
               currentAction.timeScale = 1
@@ -187,6 +225,10 @@ class CharacterActor extends BaseActor {
             break;
         }
         mixer.update(deltaTime)
+        if (upperBodyAction.enabled) {
+          upperBodyMixer.update(deltaTime)
+        }
+        
       }
     }
   }
@@ -194,55 +236,22 @@ class CharacterActor extends BaseActor {
   async onInit(): Promise<void> {
     const loader = new FBXLoader()
     const gloader = new GLTFLoader()
-    const mesh = await loader.loadAsync('assets/X Bot.fbx') as unknown as Mesh
+    const characterMeshPath = 'assets/X Bot.fbx'
+    // Some models are using a different rig which are not compatible with some animations
+    //const characterMeshPath = 'assets/Ch22_nonPBR.fbx'
+    const mesh = await loader.loadAsync(characterMeshPath) as unknown as Mesh
+
+    const characterMaterial = new MeshStandardMaterial({color: 0x999999})
+    mesh.traverse(o => {
+      if (o instanceof Mesh) {
+        o.material = characterMaterial
+      }
+    })
     
+    console.log(mesh)
     const meshRescaleFactor = 1/50
     const animationsGroup = await loader.loadAsync('assets/strafe.fbx')
-    const animations = animationsGroup.animations as AnimationClip[]
     mesh.scale.multiplyScalar(meshRescaleFactor)
-/*
-    const mixer = new AnimationMixer(mesh)
-    
-    const clip = animations[0]
-    const action = mixer.clipAction(clip)
-    action.play()
-
-    // Find the root bone, get the total distance traveled and direction.
-
-    // The root bone should be the root of the bone tree
-    const rootBoneName = mesh.children.find(c => c instanceof Bone).name
-    console.log(rootBoneName)
-    const rootTrack = clip.tracks.find(t => t.name === `${rootBoneName}.position`)
-    const startPosition = new Vector3().fromArray(rootTrack.values, 0).multiplyScalar(meshRescaleFactor)
-    const endPosition = new Vector3().fromArray(rootTrack.values, rootTrack.values.length - 3).multiplyScalar(meshRescaleFactor)
-
-    console.log(rootTrack)
-    console.log(startPosition, endPosition)
-
-    const displacement = endPosition.distanceTo(startPosition)
-    for (let i = 0; i < rootTrack.values.length; i += 3) {
-      // Zero out horizontal movement.
-      rootTrack.values[i] = 0
-      rootTrack.values[i+2] = 0
-    }
-
-    const speed = displacement / clip.duration
-    */
-    
-
-    // Root motion montages should take full control of the actor's position to also include 
-    // repositioning the collider and anything else to not clip through objects. 
-    // Root motion montages are processed together with the movement control.
-
-    // TODO There must be a nicer way to subscribe with cleanup
-    // This is another reason why most logic should lay outside actors and components.
-/*
-    this.physicsSystem.afterStep.subscribe(deltaTime => {
-      // Setting the time scale like this only makes sense for some animations.
-      action.timeScale = clip.duration / displacement * this.movement.horizontalSpeed
-      mixer.update(deltaTime)
-    })
-*/
 
     const graph = await this.createGraph(mesh)
 
@@ -283,6 +292,10 @@ function memoize<T, R>(keyFn: (T) => string, fn: (value: T, ...other: any[]) => 
 const makeClipInPlace = memoize(clip => clip.uuid, (clip: AnimationClip, rootBone: Bone): AnimationClip => {
   const copy = clip.clone()
   const rootTrack = copy.tracks.find(t => t.name === `${rootBone.name}.position`)
+  if (rootTrack == null) {
+    console.warn('Can not find root bone track in clip with root bone name ' + rootBone.name, clip)
+    return copy
+  }
   for (let i = 3; i < rootTrack.values.length; i += 3) {
     rootTrack.values[i] = rootTrack.values[0]
     rootTrack.values[i+1] = rootTrack.values[1]
@@ -304,4 +317,16 @@ async function getClip(file: string, loader: Loader, name?: string) {
 async function loadClips<T extends {[name: string]: string}>(loader: Loader, paths: T): Promise<{[Property in keyof T]: AnimationClip}>  {
   const entries = await Promise.all(Object.entries(paths).map(([name, path]) => Promise.all([name, getClip(path, loader)])))
   return Object.fromEntries(entries) as {[Property in keyof T]: AnimationClip}
+}
+
+function findBone(object: Object3D, name: string): Bone {
+  let found: Bone
+  object.traverse(o => {
+    if (o instanceof Bone && o.name === name) {
+      if (!found || found.children.length < o.children.length) {
+        found = o
+      }
+    }
+  })
+  return found
 }
