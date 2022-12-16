@@ -12,7 +12,7 @@ import {
   MeshComponent,
   ThirdPartyCameraComponent,
 } from "@hology/core/gameplay/actors"
-import { AnimationActionLoopStyles, LoopOnce } from "three";
+import { AnimationActionLoopStyles, LoopOnce, LoopPingPong } from 'three';
 import { MeshBasicMaterial } from "three";
 import { Mesh, BoxGeometry, MeshStandardMaterial, Vector3, AnimationMixer, AnimationClip, Bone, Vector2, Loader, Object3D, AnimationAction } from "three"
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -70,7 +70,8 @@ class CharacterActor extends BaseActor {
       falling: 'assets/falling idle.fbx',
       strafeLeft: 'assets/strafe (2).fbx',
       strafeRight: 'assets/strafe.fbx',
-      reload: 'assets/reload.fbx'
+      reload: 'assets/reload.fbx',
+      land: 'assets/hard landing.fbx',
     })
 
     const rootBone = mesh.children.find(c => c instanceof Bone) as Bone
@@ -148,7 +149,9 @@ class CharacterActor extends BaseActor {
     const makeSm = () => {
 
       const grounded = new AnimationState(clips.idle).named("grounded")
-      const walk = grounded.createChild(null, () => this.movement.horizontalSpeed > 0 && this.movement.mode == MovementMode.walking).named("walk")
+      const groundMovement = grounded.createChild(null, () => this.movement.horizontalSpeed > 0 && this.movement.mode == MovementMode.walking)
+      const [sprint, walk] = groundMovement.split(() => this.movement.isSprinting)      
+      //const walk = groundMovement.createChild(null, () => !this.movement.isSprinting).named("walk")
 
       const walkForward = walk.createChild(clips.walking, () => this.movement.directionInput.vertical > 0).named("walk forward")
       walkForward.createChild(clips.walkForwardLeft, () => this.movement.directionInput.horizontal < 0)
@@ -161,7 +164,17 @@ class CharacterActor extends BaseActor {
       strafe.createChild(clips.strafeRight, () => this.movement.directionInput.horizontal > 0)
       
       const fall = new AnimationState(clips.falling).named("fall")
-      grounded.transitionsBetween(fall, () => this.movement.mode === MovementMode.falling)
+      grounded.transitionsTo(fall, () => this.movement.mode === MovementMode.falling)
+
+      const land = new AnimationState(clips.land)
+
+      fall.transitionsTo(grounded, () => this.movement.mode !== MovementMode.falling && this.movement.directionInput.vector.length() > 0)
+      fall.transitionsTo(land, () => this.movement.mode !== MovementMode.falling && this.movement.directionInput.vector.length() == 0)
+      land.transitionsOnComplete(grounded)
+      land.transitionsTo(fall, () => this.movement.mode === MovementMode.falling)
+      land.transitionsTo(grounded, () => this.movement.directionInput.vector.length() > 0)
+
+      sprint.createChild(clips.run, () => true).named("sprint forward")
 
       return new AnimationStateMachine(grounded)
     }
@@ -175,10 +188,13 @@ class CharacterActor extends BaseActor {
           currentActionLastTime = currentAction.time
         }
 
-        sm.step()
+        sm.step(deltaTime)
         if (sm.current.clip) {
           // Whether it is in place or not should probably be handled by the clip
           play(sm.current.clip, true)
+          if (sm.current.clip.uuid == clips.land.uuid) {
+            currentAction.setLoop(LoopPingPong, 1)
+          }
         } else {
           console.log("clip is null", sm.current.name)
         }
@@ -287,4 +303,14 @@ function findBone(object: Object3D, name: string): Bone {
     }
   })
   return found
+}
+
+function afterDelay(ms: number) {
+  var result = false
+  setTimeout(() => {
+    result = true
+  }, ms)
+  return () => {
+    return result
+  }
 }

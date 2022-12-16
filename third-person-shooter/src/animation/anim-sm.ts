@@ -1,7 +1,6 @@
-import { rotateAxis } from "@hology/core/shader-nodes"
 import { AnimationClip } from "three"
 
-type TransitionPredicate = () => boolean
+type TransitionPredicate = (timeElapsed: number) => boolean
 
 let $uuid = 0
 
@@ -17,9 +16,15 @@ export class AnimationState {
 
   // An animation montage or more complex animation graph
   // could be used instead of a simple clip here for more functionality like emitting events
-  // blending and or chaining animations, affecting specific bones. 
+  // blending and or chaining animations, masking specific bones. 
+  // Whatever plays the animation will need to somehow delegate the event emitted. 
 
-  // It is possible to not specify a clip if it is only a group node 
+  /**
+   * An animation clip does not need to be specified. 
+   * This is is to treat the animation state as a conduit to transition to other states.
+   * This works both for standalone states as well as child states to group multiple children together
+   * under the same transition predicate. 
+   */
   constructor(public readonly clip?: AnimationClip) {}
 
   named(name: string): this {
@@ -27,15 +32,9 @@ export class AnimationState {
     return this
   }
 
-  getAllTransitions(): Transition[] {
-    return this.parent != null 
-      ? this.transitions.concat(...this.parent.getAllTransitions())
-      : this.transitions
-  }
-
   getAncestors(): AnimationState[] {
     return this.parent != null
-      ? [...this.parent.getAncestors(), this]
+      ? [this, ...this.parent.getAncestors()]
       : [this]
   }
 
@@ -52,8 +51,22 @@ export class AnimationState {
       return child
   }
 
+  split(predicate: TransitionPredicate) {
+    return [
+      this.createChild(null, predicate),
+      this.createChild(null, inversePredicate(predicate)),
+    ]
+  }
+
   transitionsTo(state: AnimationState, predicate: TransitionPredicate) {
     this.transitions.push(new Transition(state, predicate))
+  }
+
+  transitionsOnComplete(state: AnimationState, predicate?: TransitionPredicate) {
+    // The duration of the clip is reduced as some time has to go to the fading
+    this.transitionsTo(state, timeElapsed =>  
+      (predicate ? predicate(timeElapsed) : false) ||
+      timeElapsed >= this.clip.duration - .5)
   }
 
   transitionsBetween(state: AnimationState, predicate: TransitionPredicate) {
@@ -64,13 +77,15 @@ export class AnimationState {
 
 export class AnimationStateMachine {
   public current: AnimationState
+  public timer = 0
 
   constructor(private initialState: AnimationState) {
       this.current = initialState
   }
 
-  step() {
-      return this._getNext()
+  step(deltaTime: number) {
+    this.timer += deltaTime
+    return this._getNext()
   }
 
   // Avoid an infinite loop by limiting the number of found nodes on each step
@@ -99,22 +114,25 @@ export class AnimationStateMachine {
          //searchNode = searchNode.parent
       //}
 
-      this.current = traverse(this.current.getRoot())
-
+      const resolvedState = traverse(this.current.getRoot(), this.timer)
+      if (resolvedState.uuid !== this.current.uuid) {
+        this.timer = 0
+        this.current = resolvedState
+      }
       return --iterations > 0 ? this._getNext(iterations) : this.current
   }
 }
 
-function traverse(s: AnimationState): AnimationState {
+function traverse(s: AnimationState, timeElapsed: number): AnimationState {
   for (const transition of s.transitions) {
-    if (transition.predicate()) {
-        return traverse(transition.state)
+    if (transition.predicate(timeElapsed)) {
+        return traverse(transition.state, timeElapsed)
     }
   }
   if (s.clip == null) {
-    return s.getAncestors().reverse().find(p => p.clip != null) ?? s
+    return s.getAncestors().find(p => p.clip != null) ?? s
   }
   return s
 }
 
-const inversePredicate = (predicate: TransitionPredicate) => () => !predicate() 
+const inversePredicate = (predicate: TransitionPredicate) => (time: number) => !predicate(time) 
