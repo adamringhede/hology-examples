@@ -6,6 +6,8 @@ import {
   PhysicsSystem,
   attach,
   ViewController,
+  Component,
+  ActorComponent,
 } from "@hology/core/gameplay"
 import {
   CharacterMovementComponent,
@@ -21,6 +23,8 @@ import { FBXLoader } from "../three/FBXLoader";
 import ShootingComponent from "./shooting-component"
 import { AnimationState, AnimationStateMachine } from '../animation/anim-sm';
 import { VectorKeyframeTrack } from "three";
+import { AnimationObjectGroup } from "three";
+import { takeUntil } from 'rxjs';
 
 enum MovementMode {
   walking = 0,
@@ -39,6 +43,8 @@ class CharacterActor extends BaseActor {
   private isCrouching = false
 
   private viewController = inject(ViewController)
+
+  private animation = attach(CharacterAnimationComponent)
 
   mesh = attach(MeshComponent)
   thirdPartyCamera = attach(ThirdPartyCameraComponent)
@@ -79,73 +85,7 @@ class CharacterActor extends BaseActor {
     if (rootBone == null) {
       throw new Error("No root bone found in mesh")
     }
-
-    const mixer = new AnimationMixer(mesh)
-    let currentAction: AnimationAction
-
-    const upperBone = findBone(mesh, 'mixamorigSpine2')
-    const remainingBones = new Set<string>()
-    upperBone.traverse(b => {
-      remainingBones.add(b.name)
-    })
-    clips.reload.tracks = clips.reload.tracks.filter(t => remainingBones.has(t.name.split('.')[0]))
-    const upperBodyMixer = new AnimationMixer(mesh)
-    const upperBodyAction = upperBodyMixer.clipAction(clips.reload)
-    upperBodyAction.clampWhenFinished = true
-    upperBodyAction.setLoop(LoopOnce, 0)
-    upperBodyAction.play()
-    setInterval(() => {
-      upperBodyAction.play()
-    }, 6000)
   
-    upperBodyMixer.addEventListener('finished', (e) => {
-      upperBodyAction.stop()
-    })
-
-    const getDisplacement = memoize(clip => clip.uuid, (clip: AnimationClip): number => {
-        const rootTrack = clip.tracks.find(t => t.name === `${rootBone.name}.position`)
-        if (rootTrack == null) {
-          console.warn("Could not find a displacement for clip", clip)
-          return 0
-        }
-        const startPosition = new Vector3().fromArray(rootTrack.values, 0).multiplyScalar(1/50)
-        const endPosition = new Vector3().fromArray(rootTrack.values, rootTrack.values.length - 3).multiplyScalar(1/50)
-        return endPosition.distanceTo(startPosition)
-    })
-
-    const play = (clip: AnimationClip, inplace = false) => {
-      if (currentAction != null && currentAction.getClip().uuid === clip.uuid) {
-        return
-      }
-
-      if (inplace) {
-        clip = makeClipInPlace(clip, rootBone)
-      }
-
-      if (currentAction) {
-        const startAction = currentAction
-        const endAction = currentAction = mixer.clipAction( clip );
-        endAction.play()
-        endAction.enabled = true
-        endAction.setEffectiveTimeScale( 1 );
-        endAction.setEffectiveWeight( 1 );
-        endAction.time = 0.0
-        startAction.crossFadeTo(endAction, 0.2, true)
-      } else {
-        mixer.stopAllAction()
-        currentAction = mixer.clipAction( clip );
-        currentAction?.fadeIn(0.3);
-        currentAction?.play();
-      }
-    }
-
-    const updateTimescale = (clip: AnimationClip) => {
-      if (currentAction == null) return
-      currentAction.timeScale = clip.duration / getDisplacement(clip) * this.movement.horizontalSpeed
-    }
-
-    let currentActionLastTime = 0
-
     const makeSm = () => {
 
       const grounded = new AnimationState(clips.idle).named("grounded")
@@ -183,25 +123,7 @@ class CharacterActor extends BaseActor {
 
       return new AnimationStateMachine(grounded)
     }
-
-    const sm = makeSm()
-
-    return {
-      update: (deltaTime: number) => {
-        sm.step(deltaTime)
-        if (sm.current.clip) {
-          const clip = sm.current.clip
-          // Whether it is in place or not should probably be handled by the clip
-          play(clip)
-          if (clip instanceof RootMotionClip && clip.displacement > 0) {
-            currentAction.timeScale = clip.duration / (clip.displacement * mesh.scale.x) * this.movement.horizontalSpeed
-          }
-        } else {
-          console.log("clip is null", sm.current.name)
-        }
-        mixer.update(deltaTime)
-      }
-    }
+    return makeSm()
   }
 
   async onInit(): Promise<void> {
@@ -221,13 +143,15 @@ class CharacterActor extends BaseActor {
     
     console.log(mesh)
     const meshRescaleFactor = 1/50
-    const animationsGroup = await loader.loadAsync('assets/strafe.fbx')
     mesh.scale.multiplyScalar(meshRescaleFactor)
 
-    const graph = await this.createGraph(mesh)
-
+    const movementSm = await this.createGraph(mesh)
+    
+    this.animation.playStateMachine(movementSm)
+    this.animation.setup(mesh)
+    
     this.viewController.tick.subscribe(deltaTime => {
-      graph.update(deltaTime)
+      this.animation.movementSpeed = this.movement.horizontalSpeed / mesh.scale.x
     })
 
     this.mesh.replaceMesh(mesh as unknown as Mesh)
@@ -302,23 +226,13 @@ function findBone(object: Object3D, name: string): Bone {
   return found
 }
 
-function afterDelay(ms: number) {
-  var result = false
-  setTimeout(() => {
-    result = true
-  }, ms)
-  return () => {
-    return result
-  }
-}
-
 class RootMotionClip extends AnimationClip {
   public readonly motionTrack: VectorKeyframeTrack
   // Distance of the root motion translation in the scale of the animation.
   // If the mesh has been scaled, multiply this value with the scale
   public readonly displacement: number = 0
   constructor(source: AnimationClip) {
-    super(source.name, source.duration, source.tracks, source.blendMode)
+    super(source.name, source.duration, source.tracks.slice(), source.blendMode)
     this.motionTrack = source.tracks.find(t => t instanceof VectorKeyframeTrack)
     if (this.motionTrack) {
       this.tracks.splice(this.tracks.indexOf(this.motionTrack), 1)
@@ -326,7 +240,152 @@ class RootMotionClip extends AnimationClip {
       const endPosition = new Vector3().fromArray(this.motionTrack.values, this.motionTrack.values.length - 3)
       this.displacement = endPosition.distanceTo(startPosition)
     } else {
-      console.warn("Could not find root motion track", source)
+      console.error("Could not find root motion track", source)
     }
   }
+}
+
+type PlayOptions = Partial<{
+  inPlace: boolean
+  loop: boolean
+}>
+
+@Component()
+class CharacterAnimationComponent extends ActorComponent {
+  private viewController = inject(ViewController)
+  private mixer: AnimationMixer
+  private stateMachines: AnimationStateMachine[] = []
+  // TODO Supoprt multiple current actions. Maintain one per subtree. 
+  private currentAction: AnimationAction
+  public movementSpeed = null
+
+  onInit(): void | Promise<void> {
+    this.viewController.tick
+      .pipe(takeUntil(this.disposed))
+      .subscribe(deltaTime => this.updateInternal(deltaTime))
+  }
+
+  /**
+   * 
+   * @param root 
+   * @param rootBone The bone should be configured on a skeletal mesh component.
+   */
+  setup(root: Object3D | AnimationObjectGroup, rootBone?: Bone) {
+    // It should be possible to call this multiple times in case 
+    // Also, not sure if this should be a component or just part of the mesh component
+    if (this.mixer != null) {
+      this.mixer.stopAllAction()
+    }
+    this.mixer = new AnimationMixer(root)
+  }
+  /**
+   * This class should take care of current actions, one stack of actions per subtree. 
+   */
+
+  private updateStateMachines(deltaTime: number) {
+    this.stateMachines.forEach(sm => {
+      sm.step(deltaTime)
+      const clip = sm.current.clip
+      if (clip != null) {
+        this.play(clip)
+      }
+    })
+  }
+
+  private updateInternal(deltaTime: number) {
+    if (this.mixer == null) return
+    this.updateStateMachines(deltaTime)
+    this.mixer.update(deltaTime)
+  }
+
+  playStateMachine(sm: AnimationStateMachine) {
+    this.stateMachines.push(sm)
+  }
+
+  /**
+   * The clip should be replaced with something more complex which has information about looping, masks, 
+   */
+  play(clip: AnimationClip, options: PlayOptions = {}) {
+    assert(this.mixer != null, "Can't play animation before setup is called")
+
+    this.currentAction = this.transition(this.currentAction, clip)
+
+    if (clip instanceof RootMotionClip && this.movementSpeed != null && this.currentAction != null) {
+      this.currentAction.timeScale = clip.duration / clip.displacement * this.movementSpeed
+    }
+
+    /**
+     * If it is playing for a specific subtree, find the top of the stack for that subtree
+     * and use it as the current action when transitioning. 
+     * After calling play, place the new action on top of that stack. 
+     */
+
+    /**
+     * Looping and one off animations
+     * If the play commmand is saying to not loop the animation, then the action should be removed from the stack 
+     * when done. 
+     * 
+     * When animation is soon to be done, transition to the previous animation. However, only do this if the anmiation
+     * is not currently on top. 
+     * However, this might be a weird transition. It might be better to replace the previous animation rather than playing 
+     * another on top of it. Instead, maybe if the previous animation was only targeting the same or finer subtree,
+     * then replace it. If the new animation is a subtree of the other, then add to stack rather than replace it as 
+     * this is an indication that another animation is playing in the background like for example a jumping animation
+     * which even though it is also not a looping animation, it should be resumed if you do some upper body animation mid jump.
+     * This is a similar idea as the animation groups I saw somewhere else that had the default behaviour of replacing other a
+     * animations in the same group.
+     * 
+     * I am not sure if adding an event listener is a good approach. It might, be but it also might be very inefficient.
+     * Another solution could be to use rxjs. However I should benchmark this before introducing rxjs. 
+     */
+  }
+
+  private onActionDone(animationAction: AnimationAction): Promise<AnimationAction> {
+    return new Promise((resolve) => {
+      const callback = (e: {target: AnimationAction}) => {
+        if (e.target === animationAction) {
+          resolve(e.target)
+          this.mixer.removeEventListener('finished', callback)
+        }
+      }
+      this.mixer.addEventListener('finished', callback)
+    })
+  }
+
+  /**
+   * 
+   * @param currentAction The action that should be transitioned from. 
+   * @param clip 
+   * @param inplace 
+   * @returns 
+   */
+  transition(currentAction: AnimationAction, clip: AnimationClip) {
+    if (currentAction != null && currentAction.getClip().uuid === clip.uuid) {
+      return currentAction
+    }
+
+    if (currentAction) {
+      const startAction = currentAction
+      const endAction = currentAction = this.mixer.clipAction( clip );
+      endAction.play()
+      endAction.enabled = true
+      endAction.setEffectiveTimeScale( 1 );
+      endAction.setEffectiveWeight( 1 );
+      endAction.time = 0.0
+      startAction.crossFadeTo(endAction, 0.2, true)
+    } else {
+      this.mixer.stopAllAction()
+      currentAction = this.mixer.clipAction( clip );
+      currentAction?.fadeIn(0.3);
+      currentAction?.play();
+    }
+    return currentAction
+  }
+}
+
+
+function assert(expression: boolean | (() => boolean), message: string) {
+  if (expression === false || (typeof expression === 'function' && expression() === false)) {
+    throw new Error(message)
+  } 
 }
