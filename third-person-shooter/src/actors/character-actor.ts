@@ -1,4 +1,3 @@
-import { CapsuleCollisionShape, SphereCollisionShape } from "@hology/core"
 import {
   Actor,
   BaseActor,
@@ -14,9 +13,7 @@ import {
   MeshComponent,
   ThirdPartyCameraComponent,
 } from "@hology/core/gameplay/actors"
-import { AnimationActionLoopStyles, LoopOnce, LoopPingPong } from 'three';
-import { MeshBasicMaterial } from "three";
-import { Mesh, BoxGeometry, MeshStandardMaterial, Vector3, AnimationMixer, AnimationClip, Bone, Vector2, Loader, Object3D, AnimationAction } from "three"
+import { Mesh, MeshStandardMaterial, Vector3, AnimationMixer, AnimationClip, Bone, Vector2, Loader, Object3D, AnimationAction } from "three"
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FBXLoader } from "../three/FBXLoader";
 
@@ -226,21 +223,36 @@ function findBone(object: Object3D, name: string): Bone {
   return found
 }
 
+
+/**
+ * A root motion clip removes the movement track from the clip but stores 
+ * it so that it can be reused by a movement controller. 
+ * The clip can be configured to be fixed in place which is usually appropriate
+ * for animations that should not affect the character's position like normal
+ * movement animations like walking and jumping which should be controlled
+ * by game logic and physics rather than animation tracks. 
+ * Wrapping the animation in root motion though helps the character animation
+ * system to use the movement information embedded in the source clip
+ * to determine how fast or slow to play the animation.
+ */
 class RootMotionClip extends AnimationClip {
   public readonly motionTrack: VectorKeyframeTrack
   // Distance of the root motion translation in the scale of the animation.
   // If the mesh has been scaled, multiply this value with the scale
   public readonly displacement: number = 0
-  constructor(source: AnimationClip) {
+  public fixedInPlace = false
+  constructor(source: AnimationClip, rootBone?: Bone) {
     super(source.name, source.duration, source.tracks.slice(), source.blendMode)
-    this.motionTrack = source.tracks.find(t => t instanceof VectorKeyframeTrack)
+    this.motionTrack = rootBone != null
+      ? source.tracks.find(t => t.name === `${rootBone.name}.position`)
+      : source.tracks.find(t => t instanceof VectorKeyframeTrack)
     if (this.motionTrack) {
       this.tracks.splice(this.tracks.indexOf(this.motionTrack), 1)
       const startPosition = new Vector3().fromArray(this.motionTrack.values, 0)
       const endPosition = new Vector3().fromArray(this.motionTrack.values, this.motionTrack.values.length - 3)
       this.displacement = endPosition.distanceTo(startPosition)
     } else {
-      console.error("Could not find root motion track", source)
+      console.error("Could not find root motion track", source, rootBone)
     }
   }
 }
@@ -248,7 +260,35 @@ class RootMotionClip extends AnimationClip {
 type PlayOptions = Partial<{
   inPlace: boolean
   loop: boolean
+  layer: BoneLayer
 }>
+
+type BoneLayerId = number
+let $uuid: BoneLayerId = 53912381
+class BoneLayer {
+  uuid: BoneLayerId = $uuid++
+  order: number = 0
+  boneMask: Bone[] = []
+}
+
+class ActionStack {
+  actions: AnimationAction[]
+  add(action: AnimationAction) {
+    this.actions.push(action)
+  }
+  top(): AnimationAction {
+    return this.actions.length > 0 ? this.actions[this.actions.length-1] : null
+  }
+  pop() {
+    this.remove(this.top())
+  }
+  remove(action: AnimationAction) {
+    this.actions.splice(this.actions.indexOf(action), 1)
+  }
+  removeClip(clip: AnimationClip) {
+    this.actions.splice(this.actions.findIndex(a => a.getClip().uuid === clip.uuid), 1)
+  }
+}
 
 @Component()
 class CharacterAnimationComponent extends ActorComponent {
@@ -257,12 +297,27 @@ class CharacterAnimationComponent extends ActorComponent {
   private stateMachines: AnimationStateMachine[] = []
   // TODO Supoprt multiple current actions. Maintain one per subtree. 
   private currentAction: AnimationAction
+  // Having multiple actions managed at once using layers still needs to be designed.
+  //private layerActions = new Map<BoneLayer, ActionStack>() 
   public movementSpeed = null
 
   onInit(): void | Promise<void> {
     this.viewController.tick
       .pipe(takeUntil(this.disposed))
       .subscribe(deltaTime => this.updateInternal(deltaTime))
+  }
+
+  getRootMotionAction(): AnimationAction {
+    if (this.currentAction.getClip() instanceof RootMotionClip) {
+      return this.currentAction
+    }
+    // When supporting layers, the root motion should be taken from here instead. 
+    /*for (const stack of Array.from(this.layerActions.values())) {
+      const action = stack.top()
+      if (action.getClip() instanceof RootMotionClip) {
+        return action
+      }
+    }*/
   }
 
   /**
@@ -313,7 +368,24 @@ class CharacterAnimationComponent extends ActorComponent {
     if (clip instanceof RootMotionClip && this.movementSpeed != null && this.currentAction != null) {
       this.currentAction.timeScale = clip.duration / clip.displacement * this.movementSpeed
     }
+/*
 
+    if (options.layer != null) {
+      // Stop all action on this layer and below (higher order value)
+      for (const [layer, stack] of Array.from(this.layerActions.entries())) {
+        if (options.layer.order <= layer.order) {
+          // Stop and remove (replace) actions on lower layers
+        } else {
+          // for higher layers like full body, stop if lower 
+
+          // This is become incredibly complex very quickly.
+          // I should probably start with something simple like just having one bull body and one mask so that I can get 
+          // the partial full layer. Otherwise I will have to modify clips while they are running and syncing different actions
+          // which becomes very har to get right. 
+        }
+      }
+    }
+*/
     /**
      * If it is playing for a specific subtree, find the top of the stack for that subtree
      * and use it as the current action when transitioning. 
@@ -335,8 +407,16 @@ class CharacterAnimationComponent extends ActorComponent {
      * This is a similar idea as the animation groups I saw somewhere else that had the default behaviour of replacing other a
      * animations in the same group.
      * 
-     * I am not sure if adding an event listener is a good approach. It might, be but it also might be very inefficient.
-     * Another solution could be to use rxjs. However I should benchmark this before introducing rxjs. 
+     * Replace of same subtree and lower (layer) and non-looping animation. For looping animation, it should support fading back to to other one.
+     * For example, a full body root motion should replace all current animations but then fade back into whatever looping happens on the 
+     * full body layer. 
+     *
+     * Find nested layers by any bone layer that contains a subset of the bones of the provided mask.
+     * This might be difficult computationally. An ordering of layers could be computed every time a new layer is added. 
+     * When adding a new layer, push to the right/down if all the bones of the new layer is contained by the layer it is compared to.
+     * Alternatively, just have the user submit a layering ordering. Then regardless of the mask,
+     * Masks should be possible to generate using a helper function that takes 
+     *
      */
   }
 
@@ -381,6 +461,13 @@ class CharacterAnimationComponent extends ActorComponent {
     }
     return currentAction
   }
+}
+
+function maskClip(boneMask: Bone[], clip: AnimationClip): AnimationClip {
+  const copy = clip.clone()
+  const mask = new Set(boneMask.map(b => b.name))
+  copy.tracks = copy.tracks.filter(t => mask.has(t.name.split('.')[0]))
+  return copy
 }
 
 
