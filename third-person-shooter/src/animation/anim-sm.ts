@@ -58,7 +58,7 @@ export class AnimationState {
     ]
   }
 
-  transitionsTo(state: AnimationState, predicate: TransitionPredicate) {
+  transitionsTo(state: AnimationState, predicate: TransitionPredicate = () => true) {
     this.transitions.push(new Transition(state, predicate))
   }
 

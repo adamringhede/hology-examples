@@ -78,9 +78,10 @@ class ShootingComponent extends ActorComponent {
   }
 
   private async spawnBall(start: Vector3, direction: Vector3) {
-    ballOriginVec.addVectors(start, direction.clone().multiplyScalar(4))
+    ballOriginVec.addVectors(start, direction.clone().normalize().multiplyScalar(4))
     const ball = await this.actorFactory.create(BallActor)
     this.world.addActor(ball, ballOriginVec)
+    // TODO calling move to should not be necessary.
     ball.moveTo(ballOriginVec)
     ballForceVec.copy(direction).multiplyScalar(this.shootingStrength)
     this.physics.applyImpulse(

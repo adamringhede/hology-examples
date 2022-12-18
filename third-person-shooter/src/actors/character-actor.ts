@@ -20,6 +20,7 @@ import { FBXLoader } from "../three/FBXLoader";
 
 import ShootingComponent from "./shooting-component"
 import { AnimationState, AnimationStateMachine } from '../animation/anim-sm';
+import { VectorKeyframeTrack } from "three";
 
 enum MovementMode {
   walking = 0,
@@ -144,24 +145,22 @@ class CharacterActor extends BaseActor {
     }
 
     let currentActionLastTime = 0
-    let animationEnded = false
 
     const makeSm = () => {
 
       const grounded = new AnimationState(clips.idle).named("grounded")
       const groundMovement = grounded.createChild(null, () => this.movement.horizontalSpeed > 0 && this.movement.mode == MovementMode.walking)
       const [sprint, walk] = groundMovement.split(() => this.movement.isSprinting)      
-      //const walk = groundMovement.createChild(null, () => !this.movement.isSprinting).named("walk")
 
-      const walkForward = walk.createChild(clips.walking, () => this.movement.directionInput.vertical > 0).named("walk forward")
-      walkForward.createChild(clips.walkForwardLeft, () => this.movement.directionInput.horizontal < 0)
-      walkForward.createChild(clips.walkForwardRight, () => this.movement.directionInput.horizontal > 0)
+      const walkForward = walk.createChild(new RootMotionClip(clips.walking), () => this.movement.directionInput.vertical > 0).named("walk forward")
+      walkForward.createChild(new RootMotionClip(clips.walkForwardLeft), () => this.movement.directionInput.horizontal < 0)
+      walkForward.createChild(new RootMotionClip(clips.walkForwardRight), () => this.movement.directionInput.horizontal > 0)
 
-      walk.createChild(clips.walkingBackwards, () => this.movement.directionInput.vertical < 0)
+      walk.createChild(new RootMotionClip(clips.walkingBackwards), () => this.movement.directionInput.vertical < 0)
 
       const strafe = walk.createChild(null, () => this.movement.directionInput.vertical == 0).named("abstract strafe")
-      strafe.createChild(clips.strafeLeft, () => this.movement.directionInput.horizontal < 0)
-      strafe.createChild(clips.strafeRight, () => this.movement.directionInput.horizontal > 0)
+      strafe.createChild(new RootMotionClip(clips.strafeLeft), () => this.movement.directionInput.horizontal < 0)
+      strafe.createChild(new RootMotionClip(clips.strafeRight), () => this.movement.directionInput.horizontal > 0)
       
       const fall = new AnimationState(clips.falling).named("fall")
       grounded.transitionsTo(fall, () => this.movement.mode === MovementMode.falling)
@@ -170,11 +169,17 @@ class CharacterActor extends BaseActor {
 
       fall.transitionsTo(grounded, () => this.movement.mode !== MovementMode.falling && this.movement.directionInput.vector.length() > 0)
       fall.transitionsTo(land, () => this.movement.mode !== MovementMode.falling && this.movement.directionInput.vector.length() == 0)
-      land.transitionsOnComplete(grounded)
-      land.transitionsTo(fall, () => this.movement.mode === MovementMode.falling)
-      land.transitionsTo(grounded, () => this.movement.directionInput.vector.length() > 0)
+      land.transitionsOnComplete(grounded, () => 
+        this.movement.mode === MovementMode.falling || this.movement.directionInput.vector.length() > 0)
 
-      sprint.createChild(clips.run, () => true).named("sprint forward")
+      const runForward = sprint.createChild(new RootMotionClip(clips.run), () => this.movement.directionInput.vertical > 0).named("sprint forward")
+      runForward.createChild(new RootMotionClip(clips.walkForwardLeft), () => this.movement.directionInput.horizontal < 0)
+      runForward.createChild(new RootMotionClip(clips.walkForwardRight), () => this.movement.directionInput.horizontal > 0)
+      sprint.createChild(new RootMotionClip(clips.walkingBackwards), () => this.movement.directionInput.vertical < 0).named("sprint back")
+      // This is a shortcut to reuse another state. This should be used with caution though as it may not have expected results
+      sprint.transitionsTo(strafe)
+      //sprint.transitionsTo(strafeLeft, () => this.movement.directionInput.horizontal < 0)
+      //sprint.transitionsTo(strafeRight, () => this.movement.directionInput.horizontal > 0)
 
       return new AnimationStateMachine(grounded)
     }
@@ -183,26 +188,18 @@ class CharacterActor extends BaseActor {
 
     return {
       update: (deltaTime: number) => {
-        if (currentAction != null) {
-          animationEnded = currentAction.time < currentActionLastTime || currentAction.time > currentAction.getClip().duration
-          currentActionLastTime = currentAction.time
-        }
-
         sm.step(deltaTime)
         if (sm.current.clip) {
+          const clip = sm.current.clip
           // Whether it is in place or not should probably be handled by the clip
-          play(sm.current.clip, true)
-          if (sm.current.clip.uuid == clips.land.uuid) {
-            currentAction.setLoop(LoopPingPong, 1)
+          play(clip)
+          if (clip instanceof RootMotionClip && clip.displacement > 0) {
+            currentAction.timeScale = clip.duration / (clip.displacement * mesh.scale.x) * this.movement.horizontalSpeed
           }
         } else {
           console.log("clip is null", sm.current.name)
         }
         mixer.update(deltaTime)
-        if (upperBodyAction.enabled) {
-          //upperBodyMixer.update(deltaTime)
-        }
-        
       }
     }
   }
@@ -312,5 +309,24 @@ function afterDelay(ms: number) {
   }, ms)
   return () => {
     return result
+  }
+}
+
+class RootMotionClip extends AnimationClip {
+  public readonly motionTrack: VectorKeyframeTrack
+  // Distance of the root motion translation in the scale of the animation.
+  // If the mesh has been scaled, multiply this value with the scale
+  public readonly displacement: number = 0
+  constructor(source: AnimationClip) {
+    super(source.name, source.duration, source.tracks, source.blendMode)
+    this.motionTrack = source.tracks.find(t => t instanceof VectorKeyframeTrack)
+    if (this.motionTrack) {
+      this.tracks.splice(this.tracks.indexOf(this.motionTrack), 1)
+      const startPosition = new Vector3().fromArray(this.motionTrack.values, 0)
+      const endPosition = new Vector3().fromArray(this.motionTrack.values, this.motionTrack.values.length - 3)
+      this.displacement = endPosition.distanceTo(startPosition)
+    } else {
+      console.warn("Could not find root motion track", source)
+    }
   }
 }

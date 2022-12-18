@@ -13,6 +13,8 @@ import {
   ThirdPartyCameraComponent,
 } from "@hology/core/gameplay/actors"
 import { ShapeMeshInstance } from "@hology/core/scene/materializer"
+import { takeUntil } from "rxjs"
+import { Color } from "three"
 import {
   Mesh,
   BoxGeometry,
@@ -37,7 +39,7 @@ class BallActor extends BaseActor {
     mesh: new ShapeMeshInstance(
       new SphereGeometry(this.radius, 20, 10),
       //new BoxGeometry(this.radius * 2, this.radius * 2, this.radius * 2),
-      new MeshStandardMaterial({ color: 0xeff542 }),
+      new MeshStandardMaterial({ color: 0xeff542, roughness: .3 }),
       new SphereCollisionShape(this.radius)
     ),
     mass: 1,
@@ -46,6 +48,15 @@ class BallActor extends BaseActor {
 
   constructor() {
     super()
+  }
+
+  onInit(): void | Promise<void> {
+    this.physicsSystem.onCollisionWithActorType(this, BallActor).pipe(takeUntil(this.disposed)).subscribe(other => {
+      const material = other.mesh.mesh.material
+      if (material instanceof MeshStandardMaterial) {
+        material.color = new Color(0x0000ff)
+      }
+    })
   }
 
   public shoot(direction: Vector3) {
