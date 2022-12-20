@@ -13,7 +13,7 @@ import {
   MeshComponent,
   ThirdPartyCameraComponent,
 } from "@hology/core/gameplay/actors"
-import { Mesh, MeshStandardMaterial, Vector3, AnimationMixer, AnimationClip, Bone, Vector2, Loader, Object3D, AnimationAction } from "three"
+import { Mesh, MeshStandardMaterial, Vector3, AnimationMixer, AnimationClip, Bone, Vector2, Loader, Object3D, AnimationAction, KeyframeTrack, LoopOnce } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FBXLoader } from "../three/FBXLoader";
 
@@ -22,6 +22,7 @@ import { AnimationState, AnimationStateMachine } from '../animation/anim-sm';
 import { VectorKeyframeTrack } from "three";
 import { AnimationObjectGroup } from "three";
 import { takeUntil } from 'rxjs';
+import { Root } from "react-dom/client";
 
 enum MovementMode {
   walking = 0,
@@ -89,15 +90,15 @@ class CharacterActor extends BaseActor {
       const groundMovement = grounded.createChild(null, () => this.movement.horizontalSpeed > 0 && this.movement.mode == MovementMode.walking)
       const [sprint, walk] = groundMovement.split(() => this.movement.isSprinting)      
 
-      const walkForward = walk.createChild(new RootMotionClip(clips.walking), () => this.movement.directionInput.vertical > 0).named("walk forward")
-      walkForward.createChild(new RootMotionClip(clips.walkForwardLeft), () => this.movement.directionInput.horizontal < 0)
-      walkForward.createChild(new RootMotionClip(clips.walkForwardRight), () => this.movement.directionInput.horizontal > 0)
+      const walkForward = walk.createChild(RootMotionClip.fromClip(clips.walking), () => this.movement.directionInput.vertical > 0).named("walk forward")
+      walkForward.createChild(RootMotionClip.fromClip(clips.walkForwardLeft), () => this.movement.directionInput.horizontal < 0)
+      walkForward.createChild(RootMotionClip.fromClip(clips.walkForwardRight), () => this.movement.directionInput.horizontal > 0)
 
-      walk.createChild(new RootMotionClip(clips.walkingBackwards), () => this.movement.directionInput.vertical < 0)
+      walk.createChild(RootMotionClip.fromClip(clips.walkingBackwards), () => this.movement.directionInput.vertical < 0)
 
       const strafe = walk.createChild(null, () => this.movement.directionInput.vertical == 0).named("abstract strafe")
-      strafe.createChild(new RootMotionClip(clips.strafeLeft), () => this.movement.directionInput.horizontal < 0)
-      strafe.createChild(new RootMotionClip(clips.strafeRight), () => this.movement.directionInput.horizontal > 0)
+      strafe.createChild(RootMotionClip.fromClip(clips.strafeLeft), () => this.movement.directionInput.horizontal < 0)
+      strafe.createChild(RootMotionClip.fromClip(clips.strafeRight), () => this.movement.directionInput.horizontal > 0)
       
       const fall = new AnimationState(clips.falling).named("fall")
       grounded.transitionsTo(fall, () => this.movement.mode === MovementMode.falling)
@@ -109,10 +110,10 @@ class CharacterActor extends BaseActor {
       land.transitionsOnComplete(grounded, () => 
         this.movement.mode === MovementMode.falling || this.movement.directionInput.vector.length() > 0)
 
-      const runForward = sprint.createChild(new RootMotionClip(clips.run), () => this.movement.directionInput.vertical > 0).named("sprint forward")
-      runForward.createChild(new RootMotionClip(clips.walkForwardLeft), () => this.movement.directionInput.horizontal < 0)
-      runForward.createChild(new RootMotionClip(clips.walkForwardRight), () => this.movement.directionInput.horizontal > 0)
-      sprint.createChild(new RootMotionClip(clips.walkingBackwards), () => this.movement.directionInput.vertical < 0).named("sprint back")
+      const runForward = sprint.createChild(RootMotionClip.fromClip(clips.run), () => this.movement.directionInput.vertical > 0).named("sprint forward")
+      runForward.createChild(RootMotionClip.fromClip(clips.walkForwardLeft), () => this.movement.directionInput.horizontal < 0)
+      runForward.createChild(RootMotionClip.fromClip(clips.walkForwardRight), () => this.movement.directionInput.horizontal > 0)
+      sprint.createChild(RootMotionClip.fromClip(clips.walkingBackwards), () => this.movement.directionInput.vertical < 0).named("sprint back")
       // This is a shortcut to reuse another state. This should be used with caution though as it may not have expected results
       sprint.transitionsTo(strafe)
       //sprint.transitionsTo(strafeLeft, () => this.movement.directionInput.horizontal < 0)
@@ -120,7 +121,7 @@ class CharacterActor extends BaseActor {
 
       return new AnimationStateMachine(grounded)
     }
-    return makeSm()
+    return {sm: makeSm(), clips}
   }
 
   async onInit(): Promise<void> {
@@ -142,14 +143,22 @@ class CharacterActor extends BaseActor {
     const meshRescaleFactor = 1/50
     mesh.scale.multiplyScalar(meshRescaleFactor)
 
-    const movementSm = await this.createGraph(mesh)
+    const {sm, clips} = await this.createGraph(mesh)
     
-    this.animation.playStateMachine(movementSm)
-    this.animation.setup(mesh)
+    this.animation.playStateMachine(sm)
+    this.animation.setup(mesh, [findBone(mesh, "mixamorigSpine2")])
     
     this.viewController.tick.subscribe(deltaTime => {
       this.animation.movementSpeed = this.movement.horizontalSpeed / mesh.scale.x
     })
+
+    // Need a way to play just the reload animation
+    const reloadClip = RootMotionClip.fromClip(clips.reload)
+    reloadClip.fixedInPlace = false
+    reloadClip.duration -= 1 // Cut off the end of it 
+    setInterval(() => {
+      this.animation.playUpper(reloadClip)
+    }, 5000)
 
     this.mesh.replaceMesh(mesh as unknown as Mesh)
   }
@@ -211,6 +220,19 @@ async function loadClips<T extends {[name: string]: string}>(loader: Loader, pat
   return Object.fromEntries(entries) as {[Property in keyof T]: AnimationClip}
 }
 
+function findRootBone(object: Object3D): Bone {
+  let found: Bone
+  object.traverse(o => {
+    if (o instanceof Bone) {
+      if (found == null) {
+        found = o
+      }
+    }
+  })
+  return found
+}
+
+
 function findBone(object: Object3D, name: string): Bone {
   let found: Bone
   object.traverse(o => {
@@ -234,26 +256,40 @@ function findBone(object: Object3D, name: string): Bone {
  * Wrapping the animation in root motion though helps the character animation
  * system to use the movement information embedded in the source clip
  * to determine how fast or slow to play the animation.
+ * 
+ * TODO Replace root motion clip with something else. Should not need to subclass animation clip.
+ * Instead the play function should support a more complex type like an animation blueprint/graph/sequence. 
  */
 class RootMotionClip extends AnimationClip {
-  public readonly motionTrack: VectorKeyframeTrack
+  public motionTrack: VectorKeyframeTrack
   // Distance of the root motion translation in the scale of the animation.
   // If the mesh has been scaled, multiply this value with the scale
-  public readonly displacement: number = 0
-  public fixedInPlace = false
-  constructor(source: AnimationClip, rootBone?: Bone) {
-    super(source.name, source.duration, source.tracks.slice(), source.blendMode)
-    this.motionTrack = rootBone != null
+  public displacement: number = 0
+  public fixedInPlace = true // TODO should be false by defualt but need a nicer way of setting this
+  private source: AnimationClip
+
+  public static fromClip(source: AnimationClip, rootBone?: Bone): RootMotionClip {
+    const copy = new RootMotionClip(source.name, source.duration, source.tracks.slice(), source.blendMode)
+    copy.source = source
+    copy.uuid = source.uuid
+    copy.motionTrack = rootBone != null
       ? source.tracks.find(t => t.name === `${rootBone.name}.position`)
       : source.tracks.find(t => t instanceof VectorKeyframeTrack)
-    if (this.motionTrack) {
-      this.tracks.splice(this.tracks.indexOf(this.motionTrack), 1)
-      const startPosition = new Vector3().fromArray(this.motionTrack.values, 0)
-      const endPosition = new Vector3().fromArray(this.motionTrack.values, this.motionTrack.values.length - 3)
-      this.displacement = endPosition.distanceTo(startPosition)
+    if (copy.motionTrack) {
+      copy.tracks.splice(copy.tracks.indexOf(copy.motionTrack), 1)
+      const startPosition = new Vector3().fromArray(copy.motionTrack.values, 0)
+      const endPosition = new Vector3().fromArray(copy.motionTrack.values, copy.motionTrack.values.length - 3)
+      copy.displacement = endPosition.distanceTo(startPosition)
     } else {
       console.error("Could not find root motion track", source, rootBone)
     }
+    return copy
+  }
+
+  clone(): this {
+    const copy = RootMotionClip.fromClip(this.source.clone()) 
+    // @ts-ignore
+    return copy
   }
 }
 
@@ -295,11 +331,24 @@ class CharacterAnimationComponent extends ActorComponent {
   private viewController = inject(ViewController)
   private mixer: AnimationMixer
   private stateMachines: AnimationStateMachine[] = []
+  private fadeTime = .2
   // TODO Supoprt multiple current actions. Maintain one per subtree. 
-  private currentAction: AnimationAction
+  //private currentAction: AnimationAction
   // Having multiple actions managed at once using layers still needs to be designed.
   //private layerActions = new Map<BoneLayer, ActionStack>() 
   public movementSpeed = null
+  
+  // Maybe if first action is not looping, it should not be overriden by a looping action?
+  // This is very simplictic. 
+  // The full body action is intended to be driven by a state machine so it is possible to get back the previous state.
+  private fullBodyAction: AnimationAction
+  private upperBodyAction: AnimationAction
+  private fullBodyClip: AnimationClip
+  private fullBodyMask: Bone[]
+  private upperBodyMask: Bone[]
+
+  private upperBodyTimer = 0
+  private upperBodyOverride = false
 
   onInit(): void | Promise<void> {
     this.viewController.tick
@@ -308,8 +357,9 @@ class CharacterAnimationComponent extends ActorComponent {
   }
 
   getRootMotionAction(): AnimationAction {
-    if (this.currentAction.getClip() instanceof RootMotionClip) {
-      return this.currentAction
+    // Root motion has to be affecting the full body layer to be able to drive motion
+    if (this.fullBodyAction.getClip() instanceof RootMotionClip) {
+      return this.fullBodyAction
     }
     // When supporting layers, the root motion should be taken from here instead. 
     /*for (const stack of Array.from(this.layerActions.values())) {
@@ -321,13 +371,17 @@ class CharacterAnimationComponent extends ActorComponent {
   }
 
   /**
-   * 
    * @param root 
    * @param rootBone The bone should be configured on a skeletal mesh component.
    */
-  setup(root: Object3D | AnimationObjectGroup, rootBone?: Bone) {
+  setup(root: Object3D, upperBodyMask?: Bone[], rootBone?: Bone) {
     // It should be possible to call this multiple times in case 
     // Also, not sure if this should be a component or just part of the mesh component
+    if (upperBodyMask != null) {
+      this.upperBodyMask = flattenMask(upperBodyMask)
+      this.fullBodyMask = inverseMask(findRootBone(root), upperBodyMask)
+    }
+
     if (this.mixer != null) {
       this.mixer.stopAllAction()
     }
@@ -349,25 +403,82 @@ class CharacterAnimationComponent extends ActorComponent {
 
   private updateInternal(deltaTime: number) {
     if (this.mixer == null) return
+    this.upperBodyTimer += deltaTime
+    // This assumes that upper body animations are only ever to just run once
+    if (this.upperBodyAction && this.upperBodyOverride && this.upperBodyAction.getClip().duration - this.fadeTime*2 < this.upperBodyTimer) {
+      this.upperBodyOverride = false
+      this.transition(this.upperBodyAction, this.getUpperBodyClip(this.fullBodyClip))
+    }
+
     this.updateStateMachines(deltaTime)
+    this.syncMovementSpeed(this.fullBodyAction)
+    if (!this.upperBodyOverride) {
+      
+      this.syncMovementSpeed(this.upperBodyAction)
+    }
+    
     this.mixer.update(deltaTime)
+  }
+
+  private syncMovementSpeed(action: AnimationAction) {
+    if (action != null) {
+      const clip = action.getClip()
+      if (clip instanceof RootMotionClip && clip.fixedInPlace && this.movementSpeed != null) {
+        action.timeScale = clip.duration / clip.displacement * this.movementSpeed
+      }
+    }
   }
 
   playStateMachine(sm: AnimationStateMachine) {
     this.stateMachines.push(sm)
   }
 
+  playUpper(clip: AnimationClip) {
+    this.upperBodyAction = this.transition(this.upperBodyAction, this.getUpperBodyClip(clip))
+    //this.upperBodyAction.setLoop(LoopOnce, 0)
+    this.upperBodyTimer = 0
+    this.upperBodyOverride = true
+    // Need to somehow cross fade into the full body action
+  }
+
+  private getFullBodyClip = memoize(clip => clip.uuid, (clip: AnimationClip) => {
+    return maskClip(this.fullBodyMask, clip)
+  })
+
+  private getUpperBodyClip = memoize(clip => clip.uuid, (clip: AnimationClip) => {
+    return maskClip(this.upperBodyMask, clip)
+  })
+
   /**
    * The clip should be replaced with something more complex which has information about looping, masks, 
+   * 
+   * 
+   * Have one play method meant for representing movement like walking etc,
+   * 
+   * Have one method for driving the entire character's animation. It should basically just stup any upper body animation 
+   * and then trigger the full body animation.
    */
   play(clip: AnimationClip, options: PlayOptions = {}) {
     assert(this.mixer != null, "Can't play animation before setup is called")
 
-    this.currentAction = this.transition(this.currentAction, clip)
-
-    if (clip instanceof RootMotionClip && this.movementSpeed != null && this.currentAction != null) {
-      this.currentAction.timeScale = clip.duration / clip.displacement * this.movementSpeed
+    // If playing a one time upper body animation, it should not override it here. 
+    // Need to ensure this one has ended. Also, when the upper ends, it should blend into the clip used for full body.
+    
+    // TODO Handle looping upper body animations.
+    if (!this.upperBodyOverride) {
+      this.upperBodyAction = this.transition(this.upperBodyAction, this.getUpperBodyClip(clip))
     }
+    // The requested clip to run when upper body is done
+    this.fullBodyClip = clip
+
+  
+    // Need to maintain oen action for lower body and upper body
+    this.fullBodyAction = this.transition(this.fullBodyAction, this.getFullBodyClip(clip))
+
+    if (this.fullBodyAction.getClip().uuid == this.upperBodyAction.getClip().uuid) {
+      this.upperBodyAction.syncWith(this.fullBodyAction)
+    }
+
 /*
 
     if (options.layer != null) {
@@ -452,9 +563,10 @@ class CharacterAnimationComponent extends ActorComponent {
       endAction.setEffectiveTimeScale( 1 );
       endAction.setEffectiveWeight( 1 );
       endAction.time = 0.0
-      startAction.crossFadeTo(endAction, 0.2, true)
+      startAction.crossFadeTo(endAction, this.fadeTime, true)
     } else {
-      this.mixer.stopAllAction()
+      // This makes no sense when having multiple active actions per layer
+      //this.mixer.stopAllAction()
       currentAction = this.mixer.clipAction( clip );
       currentAction?.fadeIn(0.3);
       currentAction?.play();
@@ -463,11 +575,34 @@ class CharacterAnimationComponent extends ActorComponent {
   }
 }
 
+function inverseMask(bone: Bone, boneMask: Bone[]): Bone[] {
+  const mask = new Set(flattenMask(boneMask).map(b => b.uuid))
+  const inverseMask: Bone[] = []
+  bone.traverse(b => {
+    if (b instanceof Bone && !mask.has(b.uuid)) {
+      inverseMask.push(b)
+    }
+  })
+  return inverseMask
+}
+
 function maskClip(boneMask: Bone[], clip: AnimationClip): AnimationClip {
   const copy = clip.clone()
   const mask = new Set(boneMask.map(b => b.name))
   copy.tracks = copy.tracks.filter(t => mask.has(t.name.split('.')[0]))
   return copy
+}
+
+function flattenMask(boneMask: Bone[]): Bone[] {
+  return boneMask.flatMap(b => flattenTree(b)).filter(o => o instanceof Bone) as Bone[]
+}
+
+function flattenTree(obj: Object3D): Object3D[] {
+  const results = []
+  obj.traverse(o => {
+    results.push(o)
+  })
+  return results
 }
 
 
