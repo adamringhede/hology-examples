@@ -90,15 +90,15 @@ class CharacterActor extends BaseActor {
       const groundMovement = grounded.createChild(null, () => this.movement.horizontalSpeed > 0 && this.movement.mode == MovementMode.walking)
       const [sprint, walk] = groundMovement.split(() => this.movement.isSprinting)      
 
-      const walkForward = walk.createChild(RootMotionClip.fromClip(clips.walking), () => this.movement.directionInput.vertical > 0).named("walk forward")
-      walkForward.createChild(RootMotionClip.fromClip(clips.walkForwardLeft), () => this.movement.directionInput.horizontal < 0)
-      walkForward.createChild(RootMotionClip.fromClip(clips.walkForwardRight), () => this.movement.directionInput.horizontal > 0)
+      const walkForward = walk.createChild(RootMotionClip.fromClip(clips.walking, true), () => this.movement.directionInput.vertical > 0).named("walk forward")
+      walkForward.createChild(RootMotionClip.fromClip(clips.walkForwardLeft, true), () => this.movement.directionInput.horizontal < 0)
+      walkForward.createChild(RootMotionClip.fromClip(clips.walkForwardRight, true), () => this.movement.directionInput.horizontal > 0)
 
-      walk.createChild(RootMotionClip.fromClip(clips.walkingBackwards), () => this.movement.directionInput.vertical < 0)
+      walk.createChild(RootMotionClip.fromClip(clips.walkingBackwards, true), () => this.movement.directionInput.vertical < 0)
 
       const strafe = walk.createChild(null, () => this.movement.directionInput.vertical == 0).named("abstract strafe")
-      strafe.createChild(RootMotionClip.fromClip(clips.strafeLeft), () => this.movement.directionInput.horizontal < 0)
-      strafe.createChild(RootMotionClip.fromClip(clips.strafeRight), () => this.movement.directionInput.horizontal > 0)
+      strafe.createChild(RootMotionClip.fromClip(clips.strafeLeft, true), () => this.movement.directionInput.horizontal < 0)
+      strafe.createChild(RootMotionClip.fromClip(clips.strafeRight, true), () => this.movement.directionInput.horizontal > 0)
       
       const fall = new AnimationState(clips.falling).named("fall")
       grounded.transitionsTo(fall, () => this.movement.mode === MovementMode.falling)
@@ -110,10 +110,10 @@ class CharacterActor extends BaseActor {
       land.transitionsOnComplete(grounded, () => 
         this.movement.mode === MovementMode.falling || this.movement.directionInput.vector.length() > 0)
 
-      const runForward = sprint.createChild(RootMotionClip.fromClip(clips.run), () => this.movement.directionInput.vertical > 0).named("sprint forward")
-      runForward.createChild(RootMotionClip.fromClip(clips.walkForwardLeft), () => this.movement.directionInput.horizontal < 0)
-      runForward.createChild(RootMotionClip.fromClip(clips.walkForwardRight), () => this.movement.directionInput.horizontal > 0)
-      sprint.createChild(RootMotionClip.fromClip(clips.walkingBackwards), () => this.movement.directionInput.vertical < 0).named("sprint back")
+      const runForward = sprint.createChild(RootMotionClip.fromClip(clips.run, true), () => this.movement.directionInput.vertical > 0).named("sprint forward")
+      runForward.createChild(RootMotionClip.fromClip(clips.walkForwardLeft, true), () => this.movement.directionInput.horizontal < 0)
+      runForward.createChild(RootMotionClip.fromClip(clips.walkForwardRight, true), () => this.movement.directionInput.horizontal > 0)
+      sprint.createChild(RootMotionClip.fromClip(clips.walkingBackwards, true), () => this.movement.directionInput.vertical < 0).named("sprint back")
       // This is a shortcut to reuse another state. This should be used with caution though as it may not have expected results
       sprint.transitionsTo(strafe)
       //sprint.transitionsTo(strafeLeft, () => this.movement.directionInput.horizontal < 0)
@@ -157,8 +157,8 @@ class CharacterActor extends BaseActor {
     reloadClip.fixedInPlace = false
     reloadClip.duration -= 1 // Cut off the end of it 
     setInterval(() => {
-      this.animation.playUpper(reloadClip)
-    }, 5000)
+      this.animation.playUpper(reloadClip, {priority: 5, loop: false})
+    }, 6000)
 
     this.mesh.replaceMesh(mesh as unknown as Mesh)
   }
@@ -265,11 +265,14 @@ class RootMotionClip extends AnimationClip {
   // Distance of the root motion translation in the scale of the animation.
   // If the mesh has been scaled, multiply this value with the scale
   public displacement: number = 0
-  public fixedInPlace = true // TODO should be false by defualt but need a nicer way of setting this
+  public fixedInPlace = false
+  private rootBone: Bone
   private source: AnimationClip
 
-  public static fromClip(source: AnimationClip, rootBone?: Bone): RootMotionClip {
+  public static fromClip(source: AnimationClip, fixedInPlace = false, rootBone?: Bone): RootMotionClip {
     const copy = new RootMotionClip(source.name, source.duration, source.tracks.slice(), source.blendMode)
+    copy.fixedInPlace = fixedInPlace
+    copy.rootBone = rootBone
     copy.source = source
     copy.uuid = source.uuid
     copy.motionTrack = rootBone != null
@@ -287,7 +290,7 @@ class RootMotionClip extends AnimationClip {
   }
 
   clone(): this {
-    const copy = RootMotionClip.fromClip(this.source.clone()) 
+    const copy = RootMotionClip.fromClip(this.source.clone(), this.fixedInPlace, this.rootBone) 
     // @ts-ignore
     return copy
   }
@@ -426,7 +429,7 @@ class CharacterAnimationComponent extends ActorComponent {
       }
     }
 
-    if (this.fullBodyAction && this.fullBodyAction.repetitions <= 1 && this.fullBodyAction.getClip().duration - this.fadeTime*2 < this.fullBodyTimer) {
+    if (this.fullBodyAction && this.fullBodyAction.loop === LoopOnce && this.fullBodyAction.getClip().duration - this.fadeTime*2 < this.fullBodyTimer) {
       this.currentFullBodyPriority = -1
       // The full body animation is now expected to by replaced by either one from the state machine 
       // or played through a call to play(clip)
@@ -467,8 +470,8 @@ class CharacterAnimationComponent extends ActorComponent {
     this.upperStateMachines.splice(this.upperStateMachines.indexOf(sm))
   }
 
-  playUpper(clip: AnimationClip) {
-    this.upperBodyAction = this.transition(this.upperBodyAction, this.getUpperBodyClip(clip))
+  playUpper(clip: AnimationClip, options: PlayOptions = {}) {
+    this.upperBodyAction = this.transition(this.upperBodyAction, this.getUpperBodyClip(clip), options)
     //this.upperBodyAction.setLoop(LoopOnce, 0)
     this.upperBodyTimer = 0
     this.upperBodyOverride = true
@@ -507,7 +510,7 @@ class CharacterAnimationComponent extends ActorComponent {
     
     // TODO Handle looping upper body animations.
     if (!this.upperBodyOverride) {
-      this.upperBodyAction = this.transition(this.upperBodyAction, this.getUpperBodyClip(clip))
+      this.upperBodyAction = this.transition(this.upperBodyAction, this.getUpperBodyClip(clip), options)
     }
     // The requested clip to run when upper body is done
     this.fullBodyClip = clip
@@ -519,7 +522,7 @@ class CharacterAnimationComponent extends ActorComponent {
 
     // Need to maintain oen action for lower body and upper body
     
-    this.fullBodyAction = this.transition(this.fullBodyAction, this.getFullBodyClip(clip))
+    this.fullBodyAction = this.transition(this.fullBodyAction, this.getFullBodyClip(clip), options)
 
     if (this.fullBodyAction.getClip().uuid == this.upperBodyAction.getClip().uuid) {
       this.upperBodyAction.syncWith(this.fullBodyAction)
@@ -596,7 +599,7 @@ class CharacterAnimationComponent extends ActorComponent {
    * @param inplace 
    * @returns 
    */
-  transition(currentAction: AnimationAction, clip: AnimationClip) {
+  transition(currentAction: AnimationAction, clip: AnimationClip, options: PlayOptions = {}) {
     if (currentAction != null && currentAction.getClip().uuid === clip.uuid) {
       return currentAction
     }
@@ -616,6 +619,11 @@ class CharacterAnimationComponent extends ActorComponent {
       currentAction = this.mixer.clipAction( clip );
       currentAction?.fadeIn(0.3);
       currentAction?.play();
+    }
+    if (options.loop === false) {
+      currentAction.setLoop(LoopOnce, 1)
+      currentAction.clampWhenFinished = true
+      currentAction.reset()
     }
     return currentAction
   }
