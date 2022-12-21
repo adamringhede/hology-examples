@@ -40,8 +40,6 @@ class ShootingComponent extends ActorComponent {
       return
     }
 
-    console.log("triggered")
-
     /*  const from = new Vector3()
       .copy(this.actor.position)
       .add(new Vector3(0, 2.5, 0))

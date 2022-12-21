@@ -297,6 +297,7 @@ type PlayOptions = Partial<{
   inPlace: boolean
   loop: boolean
   layer: BoneLayer
+  priority: number
 }>
 
 type BoneLayerId = number
@@ -331,6 +332,7 @@ class CharacterAnimationComponent extends ActorComponent {
   private viewController = inject(ViewController)
   private mixer: AnimationMixer
   private stateMachines: AnimationStateMachine[] = []
+  private upperStateMachines: AnimationStateMachine[] = []
   private fadeTime = .2
   // TODO Supoprt multiple current actions. Maintain one per subtree. 
   //private currentAction: AnimationAction
@@ -349,6 +351,9 @@ class CharacterAnimationComponent extends ActorComponent {
 
   private upperBodyTimer = 0
   private upperBodyOverride = false
+  
+  private fullBodyTimer = 0
+  private currentFullBodyPriority = -1
 
   onInit(): void | Promise<void> {
     this.viewController.tick
@@ -396,7 +401,14 @@ class CharacterAnimationComponent extends ActorComponent {
       sm.step(deltaTime)
       const clip = sm.current.clip
       if (clip != null) {
-        this.play(clip)
+        this.play(clip, {priority: 0})
+      }
+    })
+    this.upperStateMachines.forEach(sm => {
+      sm.step(deltaTime)
+      const clip = sm.current.clip
+      if (clip != null) {
+        this.playUpper(clip)
       }
     })
   }
@@ -404,10 +416,20 @@ class CharacterAnimationComponent extends ActorComponent {
   private updateInternal(deltaTime: number) {
     if (this.mixer == null) return
     this.upperBodyTimer += deltaTime
+    this.fullBodyTimer += deltaTime
+
     // This assumes that upper body animations are only ever to just run once
     if (this.upperBodyAction && this.upperBodyOverride && this.upperBodyAction.getClip().duration - this.fadeTime*2 < this.upperBodyTimer) {
       this.upperBodyOverride = false
-      this.transition(this.upperBodyAction, this.getUpperBodyClip(this.fullBodyClip))
+      if (this.fullBodyClip != null) {
+        this.transition(this.upperBodyAction, this.getUpperBodyClip(this.fullBodyClip))
+      }
+    }
+
+    if (this.fullBodyAction && this.fullBodyAction.repetitions <= 1 && this.fullBodyAction.getClip().duration - this.fadeTime*2 < this.fullBodyTimer) {
+      this.currentFullBodyPriority = -1
+      // The full body animation is now expected to by replaced by either one from the state machine 
+      // or played through a call to play(clip)
     }
 
     this.updateStateMachines(deltaTime)
@@ -431,6 +453,18 @@ class CharacterAnimationComponent extends ActorComponent {
 
   playStateMachine(sm: AnimationStateMachine) {
     this.stateMachines.push(sm)
+  }
+
+  playUpperStateMachine(sm: AnimationStateMachine) {
+    this.upperStateMachines.push(sm)
+  }
+
+  removeStateMachine(sm: AnimationStateMachine) {
+    this.stateMachines.splice(this.stateMachines.indexOf(sm))
+  }
+
+  removeUpperStateMachine(sm: AnimationStateMachine) {
+    this.upperStateMachines.splice(this.upperStateMachines.indexOf(sm))
   }
 
   playUpper(clip: AnimationClip) {
@@ -461,6 +495,13 @@ class CharacterAnimationComponent extends ActorComponent {
   play(clip: AnimationClip, options: PlayOptions = {}) {
     assert(this.mixer != null, "Can't play animation before setup is called")
 
+    const priority = options.priority ?? 1
+    if (priority < this.currentFullBodyPriority) {
+      return
+    }
+    this.currentFullBodyPriority = priority
+    this.fullBodyTimer = 0
+
     // If playing a one time upper body animation, it should not override it here. 
     // Need to ensure this one has ended. Also, when the upper ends, it should blend into the clip used for full body.
     
@@ -471,8 +512,13 @@ class CharacterAnimationComponent extends ActorComponent {
     // The requested clip to run when upper body is done
     this.fullBodyClip = clip
 
-  
+    // If you have a state machine, it would override any full body animation played here. 
+    // This makes sensea s this is exactly how it is designed.
+    // In order to do something different, I should maybe provide a way to group animation an only override animations in the same group.
+    // Ideally, I think the animation itself should contain the data for what it should target or override. 
+
     // Need to maintain oen action for lower body and upper body
+    
     this.fullBodyAction = this.transition(this.fullBodyAction, this.getFullBodyClip(clip))
 
     if (this.fullBodyAction.getClip().uuid == this.upperBodyAction.getClip().uuid) {
@@ -610,4 +656,28 @@ function assert(expression: boolean | (() => boolean), message: string) {
   if (expression === false || (typeof expression === 'function' && expression() === false)) {
     throw new Error(message)
   } 
+}
+
+
+class Animation { 
+
+}
+
+class RootMotionAnimation extends Animation {
+  /**
+   * 
+   * The idea is to have something that can signal that it should be in place. 
+   * 
+   * An animation could potentially contain more than just one clip.
+   * It could be a blend of multiple clips. 
+   * 
+   * An animation could be additive. 
+   * It could target just specific bones using a bone mask. 
+   * 
+   * Looping animation and anything else to put on the action which currently is configured on the play action
+   */
+  constructor(public readonly clip: AnimationClip) { super() }
+
+  // I need to provide something to the character animation
+  // It can take on or more graphs
 }
