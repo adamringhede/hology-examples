@@ -13,6 +13,6 @@ export default defineConfig({
           ["@babel/plugin-proposal-decorators", { version: "2022-03" }],
         ],
       },
-    }),
+  }),
   ],
 })

@@ -1,4 +1,4 @@
-import { CapsuleCollisionShape, SphereCollisionShape } from "@hology/core"
+import { BoxCollisionShape, CapsuleCollisionShape, SphereCollisionShape } from "@hology/core"
 import {
   Actor,
   BaseActor,
@@ -36,11 +36,17 @@ class BallActor extends BaseActor {
   // is to handle collision meshes inside the loaded mesh.
 
   mesh = attach(MeshComponent, {
-    mesh: new ShapeMeshInstance(
-      new SphereGeometry(this.radius, 20, 10),
-      //new BoxGeometry(this.radius * 2, this.radius * 2, this.radius * 2),
-      new MeshStandardMaterial({ color: 0xeff542, roughness: .3 }),
-      new SphereCollisionShape(this.radius)
+    mesh: execRandom(
+      () => new ShapeMeshInstance(
+        new BoxGeometry(this.radius * 2, this.radius * 2, this.radius * 2),
+        new MeshStandardMaterial({ color: 0xeff542, roughness: .3 }),
+        new BoxCollisionShape(new Vector3(this.radius * 2, this.radius * 2, this.radius * 2))
+      ),
+      () => new ShapeMeshInstance(
+        new SphereGeometry(this.radius, 20, 10),
+        new MeshStandardMaterial({ color: 0xeff542, roughness: .3 }),
+        new SphereCollisionShape(this.radius)
+      ),
     ),
     mass: 1,
     bodyType: PhysicsBodyType.dynamic,
@@ -75,3 +81,7 @@ class BallActor extends BaseActor {
 }
 
 export default BallActor
+
+function execRandom<T>(...fn: (() => T)[]): T {
+  return fn[Math.floor(Math.random()*fn.length)]()
+}

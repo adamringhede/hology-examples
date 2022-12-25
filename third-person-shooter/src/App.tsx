@@ -19,6 +19,7 @@ import {
   Wheelbind,
 } from "@hology/core/gameplay/input"
 import PlayerController from "./services/player-controller"
+import { Vector3 } from "three"
 
 function App() {
   const containerRef = createRef<HTMLDivElement>()
@@ -53,16 +54,22 @@ class Game {
   }
 
   async start() {
-    this.physics.showDebug = false
+    this.physics.showDebug = true
 
     const spawnPoint = this.world.findActorByType(SpawnPoint)
-    spawnPoint.position.y += 2
+    spawnPoint.position.y += 4
 
-    const character = await this.world.spawnActor(CharacterActor)
-    character.moveTo(spawnPoint.position)
-
+    const character = await this.world.spawnActor(CharacterActor, spawnPoint.position)
+    //character.moveTo(spawnPoint.position)
     this.inputService.start()
     this.playerController.posess(character)
     this.playerController.start()
+
+    console.log(this.world.scene)
+
+    //  this.viewController.getCamera().position.copy(spawnPoint.position)
+    //this.viewController.getCamera().lookAt(new Vector3(15,0,0))
+    
+
   }
 }

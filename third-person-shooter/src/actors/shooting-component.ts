@@ -18,6 +18,7 @@ import {
 } from "three"
 import BallActor from "./ball-actor"
 
+let count = 0
 const raycaster = new Raycaster()
 const screenCenter = { x: 0, y: 0 }
 
@@ -32,7 +33,7 @@ class ShootingComponent extends ActorComponent {
   private world = inject(World)
   private actorFactory = inject(ActorFactory)
 
-  private shootingStrength = 50
+  private shootingStrength = 10 * 2
 
   public trigger() {
     if (this.camera == null) {
@@ -61,7 +62,7 @@ class ShootingComponent extends ActorComponent {
     // TODO From should be at the gun
     // The direction should be calculated based on (result.hitPoint ?? to - gun position)
     this.spawnBall(from, raycaster.ray.direction.normalize())
-
+    console.log(++count)
     /**
      * TODO
      *
