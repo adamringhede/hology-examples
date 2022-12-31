@@ -20,6 +20,8 @@ import {
 } from "@hology/core/gameplay/input"
 import PlayerController from "./services/player-controller"
 import { Vector3 } from "three"
+import { Pane } from "tweakpane"
+import actors from './actors'
 
 function App() {
   const containerRef = createRef<HTMLDivElement>()
@@ -29,7 +31,7 @@ function App() {
       sceneName: "demo",
       dataDir: "data",
       shaders,
-      actors: {},
+      actors,
     })
   }, [containerRef])
   return (
@@ -54,10 +56,10 @@ class Game {
   }
 
   async start() {
-    this.physics.showDebug = true
+    this.physics.showDebug = false
 
     const spawnPoint = this.world.findActorByType(SpawnPoint)
-    spawnPoint.position.y += 4
+    spawnPoint.position.y += 1
 
     const character = await this.world.spawnActor(CharacterActor, spawnPoint.position)
     //character.moveTo(spawnPoint.position)
@@ -67,9 +69,51 @@ class Game {
 
     console.log(this.world.scene)
 
+    //setInterval(() => character.shoot(), 50)
+
     //  this.viewController.getCamera().position.copy(spawnPoint.position)
     //this.viewController.getCamera().lookAt(new Vector3(15,0,0))
-    
 
   }
+}
+
+function setUpPane(character: CharacterActor) {
+
+  const PARAMS = {
+    autoStepMaxHeight: character.movement.autoStepMaxHeight,
+    autoStepMinWidth: character.movement.autoStepMinWidth,
+    snapToGround: character.movement.snapToGround,
+    shadowBias: 0
+  };
+  const pane = new Pane()
+  pane.addInput(PARAMS, 'autoStepMaxHeight', {
+    min: 0,
+    max: 1,
+  }).on('change', ev => {
+    character.movement.autoStepMaxHeight = ev.value as number
+  })
+  pane.addInput(PARAMS, 'autoStepMinWidth', {
+    min: 0,
+    max: 1, 
+  }).on('change', ev => {
+    character.movement.autoStepMinWidth = ev.value as number
+  })
+
+  pane.addInput(PARAMS, 'snapToGround', {
+    min: 0,
+    max: 2,
+  }).on('change', ev => {
+    character.movement.snapToGround = ev.value as number
+  })
+
+  pane.addInput(PARAMS, 'shadowBias', {
+    min: -.1,
+    max: .1
+  }).on('change', ev => {
+    this.viewController['view'].csm.shadowBias = ev.value
+    this.viewController['view'].csm.updateShadowBounds()
+    this.viewController['view'].csm.updateUniforms()
+    this.viewController['view'].csm.update()
+  })
+
 }

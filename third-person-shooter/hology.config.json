@@ -1,5 +1,5 @@
 {
   "dataPath": "public/data",
-  "materialsPath": "src/materials",
+  "shadersPath": "src/materials",
   "actorsPath": "src/actors"
 }

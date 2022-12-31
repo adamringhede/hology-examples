@@ -1,0 +1,15 @@
+{
+  "name": "test shader",
+  "path": "",
+  "type": "material",
+  "collisionDetection": true,
+  "material": {
+    "type": "shader",
+    "params": {
+      "metalness": 0,
+      "opacity": 1
+    },
+    "shader": "red"
+  },
+  "id": "n9w79bbx62"
+}

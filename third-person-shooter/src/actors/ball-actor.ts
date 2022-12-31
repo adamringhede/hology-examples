@@ -13,6 +13,7 @@ import {
   ThirdPartyCameraComponent,
 } from "@hology/core/gameplay/actors"
 import { ShapeMeshInstance } from "@hology/core/scene/materializer"
+import { Parameter } from "@hology/core/shader/parameter"
 import { takeUntil } from "rxjs"
 import { Color } from "three"
 import {
@@ -23,12 +24,13 @@ import {
   MeshLambertMaterial,
   SphereGeometry,
 } from "three"
-import ShootingComponent from "./shooting-component"
 
 @Actor()
 class BallActor extends BaseActor {
   private physicsSystem = inject(PhysicsSystem)
-  private radius = 0.4
+
+  @Parameter()
+  public radius: number = 0.4
 
   // TODO Need to be able to pass in physics options to mesh component
 
@@ -57,6 +59,8 @@ class BallActor extends BaseActor {
   }
 
   onInit(): void | Promise<void> {
+    this.mesh.mesh.castShadow = true
+    this.mesh.mesh.receiveShadow = true
     this.physicsSystem.onCollisionWithActorType(this, BallActor).pipe(takeUntil(this.disposed)).subscribe(other => {
       const material = other.mesh.mesh.material
       if (material instanceof MeshStandardMaterial) {

@@ -51,6 +51,7 @@ class CharacterActor extends BaseActor {
   thirdPartyCamera = attach(ThirdPartyCameraComponent)
 
   public readonly movement = attach(CharacterMovementComponent, {
+    autoStepMaxHeight: 0,
     colliderHeight: 2.2,
     colliderRadius: .6,
     maxWalkingSlopeAngle: 70,
@@ -155,7 +156,7 @@ class CharacterActor extends BaseActor {
     reloadClip.fixedInPlace = false
     reloadClip.duration -= 1 // Cut off the end of it 
     setInterval(() => {
-      this.animation.playUpper(reloadClip, {priority: 5, loop: false})
+      //this.animation.playUpper(reloadClip, {priority: 5, loop: false})
     }, 6000)
 
     this.mesh.replaceMesh(mesh as unknown as Mesh)
