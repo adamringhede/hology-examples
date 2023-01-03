@@ -1,5 +1,5 @@
 {
-  "name": "Basic Gray",
+  "name": "Rock",
   "path": "",
   "type": "material",
   "collisionDetection": true,
@@ -7,13 +7,12 @@
     "type": "standard",
     "params": {
       "metalness": 0,
-      "opacity": 1,
-      "color": "#a3a3a3"
+      "opacity": 1
     },
     "shaderParams": {
       "color": {
         "type": 10,
-        "value": "#d9d9d9"
+        "value": "#887353"
       },
       "roughness": {
         "type": 1
@@ -64,5 +63,5 @@
       }
     }
   },
-  "id": "hahbj5tm3t"
+  "id": "m3sj9yizdd"
 }

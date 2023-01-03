@@ -1,29 +1,16 @@
-import { BoxCollisionShape, CapsuleCollisionShape, SphereCollisionShape } from "@hology/core"
+import { BoxCollisionShape, SphereCollisionShape, PhysicalShapeMesh } from "@hology/core"
 import {
-  Actor,
-  BaseActor,
-  inject,
-  PhysicsSystem,
-  attach,
-  PhysicsBodyType,
+  Actor, attach, BaseActor,
+  inject, PhysicsBodyType, PhysicsSystem
 } from "@hology/core/gameplay"
 import {
-  CharacterMovementComponent,
-  MeshComponent,
-  ThirdPartyCameraComponent,
+  MeshComponent
 } from "@hology/core/gameplay/actors"
-import { ShapeMeshInstance } from "@hology/core/scene/materializer"
 import { Parameter } from "@hology/core/shader/parameter"
 import { takeUntil } from "rxjs"
-import { Color } from "three"
-import {
-  Mesh,
-  BoxGeometry,
-  MeshStandardMaterial,
-  Vector3,
-  MeshLambertMaterial,
-  SphereGeometry,
-} from "three"
+import { BoxGeometry, Color, MeshStandardMaterial, SphereGeometry, Vector3 } from "three"
+
+console.log("shapemesh", new SphereCollisionShape(5) instanceof SphereCollisionShape)
 
 @Actor()
 class BallActor extends BaseActor {
@@ -39,12 +26,12 @@ class BallActor extends BaseActor {
 
   mesh = attach(MeshComponent, {
     mesh: execRandom(
-      () => new ShapeMeshInstance(
+      () => new PhysicalShapeMesh(
         new BoxGeometry(this.radius * 2, this.radius * 2, this.radius * 2),
         new MeshStandardMaterial({ color: 0xeff542, roughness: .3 }),
         new BoxCollisionShape(new Vector3(this.radius * 2, this.radius * 2, this.radius * 2))
       ),
-      () => new ShapeMeshInstance(
+      () => new PhysicalShapeMesh(
         new SphereGeometry(this.radius, 20, 10),
         new MeshStandardMaterial({ color: 0xeff542, roughness: .3 }),
         new SphereCollisionShape(this.radius)
@@ -52,11 +39,8 @@ class BallActor extends BaseActor {
     ),
     mass: 1,
     bodyType: PhysicsBodyType.dynamic,
+    continousCollisionDetection: true
   })
-
-  constructor() {
-    super()
-  }
 
   onInit(): void | Promise<void> {
     this.mesh.mesh.castShadow = true

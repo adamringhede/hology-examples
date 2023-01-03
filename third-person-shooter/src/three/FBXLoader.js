@@ -41,6 +41,7 @@ import {
   VectorKeyframeTrack,
   sRGBEncoding,
 } from 'three'
+// Not including this reduces bundle size by >100KB
 import { unzlibSync } from 'fflate'
 
 

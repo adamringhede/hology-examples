@@ -8,5 +8,12 @@
   "fileFormat": "glb",
   "sourceFile": "/Users/adamringhede/Dropbox/Hobby/Modeling/map_assets/rock_simple.glb",
   "mesh": {},
-  "castShadow": true
+  "castShadow": true,
+  "materialAssignments": [
+    {
+      "color": "#392d20",
+      "materialId": "m3sj9yizdd",
+      "name": "Rock2"
+    }
+  ]
 }

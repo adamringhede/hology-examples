@@ -9,7 +9,13 @@
       "metalness": 0,
       "opacity": 1
     },
-    "shader": "red"
+    "shader": "red",
+    "shaderParams": {
+      "opacity": {
+        "type": 1,
+        "value": 0.65
+      }
+    }
   },
   "id": "n9w79bbx62"
 }

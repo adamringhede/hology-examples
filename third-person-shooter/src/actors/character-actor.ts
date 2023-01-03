@@ -1,31 +1,19 @@
 import {
-  Actor,
-  BaseActor,
+  Actor, AnimationState,
+  AnimationStateMachine, attach, BaseActor,
   inject,
-  PhysicsSystem,
-  attach,
-  ViewController,
-  Component,
-  ActorComponent,
-  AnimationState,
-  AnimationStateMachine,
-  RootMotionClip,
-} from "@hology/core/gameplay"
+  PhysicsSystem, RootMotionClip, ViewController
+} from "@hology/core/gameplay";
 import {
   CharacterAnimationComponent,
   CharacterMovementComponent,
   MeshComponent,
-  ThirdPartyCameraComponent,
-} from "@hology/core/gameplay/actors"
-import { Mesh, MeshStandardMaterial, Vector3, AnimationMixer, AnimationClip, Bone, Vector2, Loader, Object3D, AnimationAction, KeyframeTrack, LoopOnce } from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+  ThirdPartyCameraComponent
+} from "@hology/core/gameplay/actors";
+import { AnimationClip, Bone, Loader, Mesh, MeshStandardMaterial, Object3D, Vector3 } from 'three';
 import { FBXLoader } from "../three/FBXLoader";
 
-import ShootingComponent from "./shooting-component"
-import { VectorKeyframeTrack } from "three";
-import { AnimationObjectGroup } from "three";
-import { takeUntil } from 'rxjs';
-import { Root } from "react-dom/client";
+import ShootingComponent from "./shooting-component";
 
 enum MovementMode {
   walking = 0,
