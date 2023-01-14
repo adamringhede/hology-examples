@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@babel/plugin-proposal-decorators": "^7.20.5",
+    "@plumier/reflect": "^1.1.1",
     "@types/three": "^0.138.0",
     "fflate": "^0.7.4",
     "react": "^18.2.0",

@@ -2,7 +2,7 @@ import {
   Actor, AnimationState,
   AnimationStateMachine, attach, BaseActor,
   inject,
-  PhysicsSystem, RootMotionClip, ViewController
+  PhysicsSystem, RootMotionClip, ViewController, World
 } from "@hology/core/gameplay";
 import {
   CharacterAnimationComponent,
@@ -12,8 +12,11 @@ import {
 } from "@hology/core/gameplay/actors";
 import { AnimationClip, Bone, Loader, Mesh, MeshStandardMaterial, Object3D, Vector3 } from 'three';
 import { FBXLoader } from "../three/FBXLoader";
+import { GLTFLoader } from '../three/GLTFLoader'
+import * as THREE from 'three'
 
 import ShootingComponent from "./shooting-component";
+import { Quaternion } from "cannon-es";
 
 enum MovementMode {
   walking = 0,
@@ -115,15 +118,49 @@ class CharacterActor extends BaseActor {
     return {sm: makeSm(), clips}
   }
 
+  private world = inject(World)
+  private muzzleObject: Object3D
+
   async onInit(): Promise<void> {
     const loader = new FBXLoader()
     const characterMeshPath = 'assets/X Bot.fbx'
     const mesh = await loader.loadAsync(characterMeshPath) as unknown as Mesh
 
+    const weaponMeshGroup = (await new GLTFLoader().loadAsync('assets/weapon.glb')).scene as THREE.Group
+    weaponMeshGroup.children.shift() // Remove first armature
+    // TODO Change gltf loader to be able to exclude armatures
+    const weaponMesh = weaponMeshGroup
+    console.log(weaponMesh)
+
+    //this.world.scene.add(weaponMesh)
+  
+    //mesh.rotateY(Math.PI)
+    
+    weaponMesh.scale.multiplyScalar(20)
+
+    let handBone: Object3D
+    mesh.traverse(o => {
+      if (o.name.includes('mixamorigRightHand') && handBone == null) {
+        handBone = o
+      }
+      console.log(o.name)
+    })
+    handBone.add(weaponMesh)
+
+    weaponMesh.traverse(o => {
+      if (o.name === 'SO_Muzzle') {
+        this.muzzleObject = o
+
+      }
+    })
+    
+
+
     const characterMaterial = new MeshStandardMaterial({color: 0x999999})
     mesh.traverse(o => {
       if (o instanceof Mesh) {
         o.material = characterMaterial
+        o.castShadow = true
       }
     })
     
@@ -139,6 +176,23 @@ class CharacterActor extends BaseActor {
       this.animation.movementSpeed = this.movement.horizontalSpeed / mesh.scale.x
     })
 
+    const spineBone = findBone(mesh, "mixamorigSpine1")
+
+    // This should happen after animation is updated. I am just lucky that it works here
+    let elapsedTime = 0
+    this.viewController.tick.subscribe(deltaTime => {
+      elapsedTime += deltaTime
+      if (this.movement.mode !== MovementMode.falling) {
+        const meshWorldRotation = this.container.getWorldQuaternion(new THREE.Quaternion())
+        const worldRotation = spineBone.getWorldQuaternion(new THREE.Quaternion())
+        const axis = new Vector3(-1,0,0).normalize()
+        axis.applyQuaternion(worldRotation.invert().multiply(meshWorldRotation))
+        //const rotation = Math.PI * Math.sin(elapsedTime) * 0.5
+        spineBone.rotateOnAxis(axis, Math.asin(-this.thirdPartyCamera.rotationInput.rotation.x))
+      }
+
+    })
+
     // Need a way to play just the reload animation
     const reloadClip = RootMotionClip.fromClip(clips.reload)
     reloadClip.fixedInPlace = false
@@ -151,8 +205,11 @@ class CharacterActor extends BaseActor {
   }
 
   shoot() {
-    this.shooting.camera = this.thirdPartyCamera.camera.instance
-    this.shooting.trigger()
+    if (this.movement.mode === MovementMode.walking) {
+      this.shooting.camera = this.thirdPartyCamera.camera.instance
+      this.muzzleObject.getWorldPosition(ballWorldPosition)
+      this.shooting.trigger(ballWorldPosition)
+    }
   }
 
   moveTo(position: Vector3) {
@@ -161,6 +218,7 @@ class CharacterActor extends BaseActor {
   }
 }
 
+const ballWorldPosition = new Vector3()
 export default CharacterActor
 
 

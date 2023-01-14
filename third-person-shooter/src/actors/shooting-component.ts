@@ -33,9 +33,9 @@ class ShootingComponent extends ActorComponent {
   private world = inject(World)
   private actorFactory = inject(ActorFactory)
 
-  private shootingStrength = 10 * 2
+  private shootingStrength = 5
 
-  public trigger() {
+  public trigger(position?: Vector3) {
     if (this.camera == null) {
       console.warn("Camera not set on shooting component")
       return
@@ -61,7 +61,12 @@ class ShootingComponent extends ActorComponent {
 
     // TODO From should be at the gun
     // The direction should be calculated based on (result.hitPoint ?? to - gun position)
-    this.spawnBall(from, raycaster.ray.direction.normalize())
+    const ballFrom = position ?? from
+
+
+
+
+    this.spawnBall(ballFrom, raycaster.ray.direction.normalize())
     console.log(++count)
     /**
      * TODO
@@ -77,7 +82,7 @@ class ShootingComponent extends ActorComponent {
   }
 
   private async spawnBall(start: Vector3, direction: Vector3) {
-    ballOriginVec.addVectors(start, direction.clone().normalize().multiplyScalar(4))
+    ballOriginVec.addVectors(start, direction.clone().normalize().multiplyScalar(1))
     const ball = await this.actorFactory.create(BallActor)
     this.world.addActor(ball, ballOriginVec)
     // TODO calling move to should not be necessary.
@@ -87,6 +92,22 @@ class ShootingComponent extends ActorComponent {
       ball,
       ballForceVec
     )
+  }
+
+  private addMarker(pos: Vector3) {
+
+    const hitMesh = new Mesh(
+      new SphereGeometry(0.3, 4, 4),
+      new MeshLambertMaterial({ color: 0xff0000 })
+    )
+    hitMesh.position.copy(pos)
+
+    this.world.scene.add(hitMesh)
+
+    setTimeout(() => {
+      this.world.scene.remove(hitMesh)
+    }, 1000)
+
   }
 
   private addHitMarker(result: RayTestResult) {

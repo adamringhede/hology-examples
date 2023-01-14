@@ -22,6 +22,7 @@ import PlayerController from "./services/player-controller"
 import { Vector3 } from "three"
 import { Pane } from "tweakpane"
 import actors from './actors'
+import { TriggerVolume } from "@hology/core/gameplay/actors"
 
 function App() {
   const containerRef = createRef<HTMLDivElement>()
@@ -68,6 +69,16 @@ class Game {
     this.playerController.start()
 
     console.log(this.world.scene)
+
+    const tv = this.world.findActorByType(TriggerVolume)
+
+    this.physics.onBeginOverlapWithActor(character, tv).subscribe(c => {
+      console.log('entered', c)
+    })
+
+    this.physics.onEndOverlapWithActorType(character, TriggerVolume).subscribe(c => {
+      console.log('exited', c)
+    })
 
     //setInterval(() => character.shoot(), 50)
 
