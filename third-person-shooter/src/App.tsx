@@ -71,19 +71,16 @@ class Game {
     console.log(this.world.scene)
 
     const tv = this.world.findActorByType(TriggerVolume)
-
+/*
     this.physics.onBeginOverlapWithActor(character, tv).subscribe(c => {
       console.log('entered', c)
     })
 
     this.physics.onEndOverlapWithActorType(character, TriggerVolume).subscribe(c => {
       console.log('exited', c)
-    })
+    })*/
 
     //setInterval(() => character.shoot(), 50)
-
-    //  this.viewController.getCamera().position.copy(spawnPoint.position)
-    //this.viewController.getCamera().lookAt(new Vector3(15,0,0))
 
   }
 }

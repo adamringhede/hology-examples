@@ -14,9 +14,7 @@ import { AnimationClip, Bone, Loader, Mesh, MeshStandardMaterial, Object3D, Vect
 import { FBXLoader } from "../three/FBXLoader";
 import { GLTFLoader } from '../three/GLTFLoader'
 import * as THREE from 'three'
-
 import ShootingComponent from "./shooting-component";
-import { Quaternion } from "cannon-es";
 
 enum MovementMode {
   walking = 0,
@@ -122,11 +120,19 @@ class CharacterActor extends BaseActor {
   private muzzleObject: Object3D
 
   async onInit(): Promise<void> {
+    // Using draco compression can reduce the file size by 2x
+    //const dracoLoader = new DRACOLoader();
+    //dracoLoader.setDecoderPath('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/js/libs/draco/'); // use a full url path
+
     const loader = new FBXLoader()
+    const glbLoader = new GLTFLoader()
+    //glbLoader.setDRACOLoader(dracoLoader);
+
     const characterMeshPath = 'assets/X Bot.fbx'
+    //const mesh = (await glbLoader.loadAsync('assets/X Bot compressed.glb')).scene as unknown as Mesh
     const mesh = await loader.loadAsync(characterMeshPath) as unknown as Mesh
 
-    const weaponMeshGroup = (await new GLTFLoader().loadAsync('assets/weapon.glb')).scene as THREE.Group
+    const weaponMeshGroup = (await glbLoader.loadAsync('assets/weapon.glb')).scene as THREE.Group
     weaponMeshGroup.children.shift() // Remove first armature
     // TODO Change gltf loader to be able to exclude armatures
     const weaponMesh = weaponMeshGroup
@@ -177,6 +183,9 @@ class CharacterActor extends BaseActor {
     })
 
     const spineBone = findBone(mesh, "mixamorigSpine1")
+
+    // An improvement could be to apply the rotation to a chain of bones uniformly 
+    // to get a smoother curve of the upper body
 
     // This should happen after animation is updated. I am just lucky that it works here
     let elapsedTime = 0

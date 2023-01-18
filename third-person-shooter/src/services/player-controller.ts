@@ -24,7 +24,7 @@ enum InputAction {
 
 @Service()
 class PlayerController {
-  private inputService = inject(InputService)
+  private inputService = inject(InputService) // maybe support multple input services
   private character: CharacterActor
 
   public start() {
