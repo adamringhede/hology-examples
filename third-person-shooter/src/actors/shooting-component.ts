@@ -67,7 +67,7 @@ class ShootingComponent extends ActorComponent {
 
 
     this.spawnBall(ballFrom, raycaster.ray.direction.normalize())
-    console.log(++count)
+    //console.log(++count)
     /**
      * TODO
      *

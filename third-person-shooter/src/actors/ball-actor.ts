@@ -11,8 +11,6 @@ import { Parameter } from "@hology/core/shader/parameter"
 import { takeUntil } from "rxjs"
 import { BoxGeometry, Color, MeshStandardMaterial, SphereGeometry, Vector3 } from "three"
 
-console.log("shapemesh", new SphereCollisionShape(5) instanceof SphereCollisionShape)
-
 @Actor()
 class BallActor extends BaseActor {
   private physicsSystem = inject(PhysicsSystem)

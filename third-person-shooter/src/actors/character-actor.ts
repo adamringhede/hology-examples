@@ -136,7 +136,6 @@ class CharacterActor extends BaseActor {
     weaponMeshGroup.children.shift() // Remove first armature
     // TODO Change gltf loader to be able to exclude armatures
     const weaponMesh = weaponMeshGroup
-    console.log(weaponMesh)
 
     //this.world.scene.add(weaponMesh)
   
@@ -149,7 +148,6 @@ class CharacterActor extends BaseActor {
       if (o.name.includes('mixamorigRightHand') && handBone == null) {
         handBone = o
       }
-      console.log(o.name)
     })
     handBone.add(weaponMesh)
 
