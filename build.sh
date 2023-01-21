@@ -2,6 +2,7 @@
 
 rm -rf .dist
 
+mkdir -p .dist
 cp index.html ./.dist/
 
 apps=("third-person-shooter")
