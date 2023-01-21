@@ -2,6 +2,8 @@
 
 rm -rf .dist
 
+cp index.html ./.dist/
+
 apps=("third-person-shooter")
 
 for i in ${!apps[@]};

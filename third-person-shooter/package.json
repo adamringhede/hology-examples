@@ -9,17 +9,19 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@babel/plugin-proposal-decorators": "^7.20.5",
+    "@dimforge/rapier3d-compat": "^0.10.0",
+    "@hology/core": "^0.0.9",
     "@plumier/reflect": "^1.1.1",
     "@types/three": "^0.138.0",
     "fflate": "^0.7.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "rxjs": "^7.4.0",
+    "three": "^0.138.3",
     "tweakpane": "^3.1.1"
   },
   "devDependencies": {
-    "@hology/core": "file:../../hology/packages/core",
+    "@babel/plugin-proposal-decorators": "^7.20.5",
     "@rollup/plugin-typescript": "^10.0.1",
     "@tweakpane/core": "^1.1.1",
     "@types/react": "^18.0.24",
