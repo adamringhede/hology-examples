@@ -1,0 +1,27 @@
+{
+  "name": "feb26",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@babel/plugin-proposal-decorators": "^7.21.0",
+    "@dimforge/rapier3d-compat": "^0.11.1",
+    "@hology/core": "^0.0.9",
+    "@types/three": "^0.138.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "three": "^0.138.3"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.27",
+    "@types/react-dom": "^18.0.10",
+    "@vitejs/plugin-react": "^2.2.0",
+    "typescript": "^4.8.4",
+    "vite": "^3.2.3"
+  }
+}
