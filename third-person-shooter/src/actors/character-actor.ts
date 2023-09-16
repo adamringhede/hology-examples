@@ -15,6 +15,7 @@ import { FBXLoader } from "../three/FBXLoader";
 import { GLTFLoader } from '../three/GLTFLoader'
 import * as THREE from 'three'
 import ShootingComponent from "./shooting-component";
+import { PhysicalShapeMesh } from "@hology/core";
 
 enum MovementMode {
   walking = 0,
@@ -40,17 +41,25 @@ class CharacterActor extends BaseActor {
   thirdPartyCamera = attach(ThirdPartyCameraComponent)
 
   public readonly movement = attach(CharacterMovementComponent, {
-    autoStepMaxHeight: 0,
+    maxSpeed: 5,
+    snapToGround: 0.3,
+    autoStepMaxHeight: 0.7,
+  /*  autoStepMaxHeight: 0,
+    autoStepMinWidth: 0,
     colliderHeight: 2.2,
     colliderRadius: .6,
-    maxWalkingSlopeAngle: 70,
-    maxSpeed: 3,
+    minSlopeSlideAngle: THREE.MathUtils.degToRad(70),
+    maxSlopeClimbAngle: THREE.MathUtils.degToRad(70),
+    maxSpeed: 5,
     maxSpeedBackwards: 3,
-    maxSpeedSprint: 7,
+    maxSpeedSprint: 7,*/
+    fallingReorientation: true,
+    fallingMovementControl: 0.2
   })
 
   constructor() {
     super()
+    this.physicsSystem.showDebug = false
   }
 
 
@@ -209,6 +218,16 @@ class CharacterActor extends BaseActor {
     }, 6000)
 
     this.mesh.replaceMesh(mesh as unknown as Mesh)
+
+    setInterval(() => {
+      // Need to run after the movement component is initiated is run
+      // I should change it to not override 
+      //this.movement.autoStepMinWidth = 0.002
+      //this.movement.snapToGround = 0.3
+      //this.movement.autoStepMaxHeight = 0.2
+      //this.movement['cc'].setMinSlopeSlideAngle(THREE.MathUtils.degToRad(80))
+      //this.movement['cc'].setMaxSlopeClimbAngle(THREE.MathUtils.degToRad(100))
+    }, 100)
   }
 
   shoot() {
