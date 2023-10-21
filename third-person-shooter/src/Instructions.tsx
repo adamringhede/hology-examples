@@ -3,7 +3,8 @@
 
 export default function Instructions() {
 
-
+    const isMac = navigator.userAgent.indexOf('Mac OS X') != -1
+    const ctrlSymbol = isMac ? '⌘' : 'Ctrl' 
     return (
         <div className="panel" style={{
             color: '#ffffff',
@@ -48,7 +49,7 @@ export default function Instructions() {
                     <div>
                      <div className="keymap">Esc</div>
                     </div>
-                    <div><div className="keymap">Ctrl + R</div></div>
+                    <div><div className="keymap">{ctrlSymbol} + R</div></div>
                 </div>
 
             </div>
