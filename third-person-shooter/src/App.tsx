@@ -23,6 +23,7 @@ import { Vector3 } from "three"
 import { Pane } from "tweakpane"
 import actors from './actors'
 import { TriggerVolume } from "@hology/core/gameplay/actors"
+import Instructions from "./Instructions"
 
 function App() {
   const containerRef = createRef<HTMLDivElement>()
@@ -38,6 +39,7 @@ function App() {
   return (
     <div className="App">
       <div ref={containerRef}></div>
+      <Instructions></Instructions>
     </div>
   )
 }
@@ -57,7 +59,7 @@ class Game {
   }
 
   async start() {
-    this.physics.showDebug = true
+    this.physics.showDebug = false
 
     const spawnPoint = this.world.findActorByType(SpawnPoint)
     spawnPoint.position.y += 1
@@ -67,8 +69,6 @@ class Game {
     this.inputService.start()
     this.playerController.posess(character)
     this.playerController.start()
-
-    console.log(this.world.scene)
 
     const tv = this.world.findActorByType(TriggerVolume)
   }

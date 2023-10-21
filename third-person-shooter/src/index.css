@@ -68,3 +68,14 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+
+.keymap {
+  background-color: #232323;
+  border-radius: 5px;
+  padding: 5px 5px 5px 5px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: inline;
+  margin-right: 2px;
+}
