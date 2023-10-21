@@ -80,7 +80,16 @@ class PlayerController {
 
     document.addEventListener("mousedown", (event) => {
       if (event.button === leftMouseButton && this.character.thirdPartyCamera.isMouseLocked) {
-        this.character.shoot()
+        this.character.startShooting()
+      }
+    })
+
+    document.addEventListener("mouseup", (event) => {
+      if (
+        event.button === leftMouseButton &&
+        this.character.thirdPartyCamera.isMouseLocked
+      ) {
+        this.character.stopShoot()
       }
     })
   }

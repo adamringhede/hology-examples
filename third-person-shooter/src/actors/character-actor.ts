@@ -38,12 +38,15 @@ class CharacterActor extends BaseActor {
   private animation = attach(CharacterAnimationComponent)
 
   mesh = attach(MeshComponent)
-  thirdPartyCamera = attach(ThirdPartyCameraComponent)
+  thirdPartyCamera: ThirdPartyCameraComponent = attach(ThirdPartyCameraComponent)
 
   public readonly movement = attach(CharacterMovementComponent, {
-    maxSpeed: 5,
+    maxSpeed: 6,
+    maxSpeedSprint: 14,
+    maxSpeedBackwards: 4,
     snapToGround: 0.3,
     autoStepMaxHeight: 0.7,
+
   /*  autoStepMaxHeight: 0,
     autoStepMinWidth: 0,
     colliderHeight: 2.2,
@@ -210,6 +213,7 @@ class CharacterActor extends BaseActor {
     })
 
     // Need a way to play just the reload animation
+    // When running out of ammo, reload or whenever the player clicks reload
     const reloadClip = RootMotionClip.fromClip(clips.reload)
     reloadClip.fixedInPlace = false
     reloadClip.duration -= 1 // Cut off the end of it 
@@ -230,12 +234,34 @@ class CharacterActor extends BaseActor {
     }, 100)
   }
 
+  private isShooting = false
+  private shootInterval
+
+
   shoot() {
+    this.shooting.camera = this.thirdPartyCamera.camera.instance
+    this.muzzleObject.getWorldPosition(ballWorldPosition)
+    this.shooting.trigger(ballWorldPosition)
+  }
+
+  startShooting() {
     if (this.movement.mode === MovementMode.walking) {
-      this.shooting.camera = this.thirdPartyCamera.camera.instance
-      this.muzzleObject.getWorldPosition(ballWorldPosition)
-      this.shooting.trigger(ballWorldPosition)
+      this.isShooting = true
+      this.shoot()
+      this.shootInterval = setInterval(() => {
+        this.shooting.camera = this.thirdPartyCamera.camera.instance
+        this.muzzleObject.getWorldPosition(ballWorldPosition)
+        this.shooting.trigger(ballWorldPosition)
+        if (this.movement.mode !== MovementMode.walking) {
+          this.stopShoot()
+        }
+      }, 600)
     }
+  }
+
+  stopShoot() {
+    this.isShooting = false
+    clearInterval(this.shootInterval)
   }
 
   moveTo(position: Vector3) {

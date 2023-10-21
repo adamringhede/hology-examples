@@ -8,6 +8,7 @@
       "dom.iterable", 
       "esnext"
     ],
+    "outDir": "dist",
     "allowJs": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
@@ -20,10 +21,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
-    /*"paths": {
+    "paths": {
       "@hology/core": ["../../hology/packages/core/src"],
       "@hology/core/*": ["../../hology/packages/core/src/*"]
-    }*/
+    }
   },
   "include": ["src"]
 }

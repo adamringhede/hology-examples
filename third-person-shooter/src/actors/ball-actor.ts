@@ -76,10 +76,10 @@ class BallActor extends BaseActor {
     ))
     this.mesh.mesh.castShadow = true
     this.mesh.mesh.receiveShadow = true
-    this.physicsSystem.onCollisionWithActorType(this, BallActor).pipe(takeUntil(this.disposed)).subscribe(other => {
+    this.physicsSystem.onCollisionWithActorType(this, BallActor).subscribe(other => {
       const material = other.mesh.mesh.material
       if (material instanceof MeshStandardMaterial) {
-        material.color = new Color(Math.random(), Math.random(), Math.random())
+       // material.color = new Color(Math.random(), Math.random(), Math.random())
       }
     })
   }

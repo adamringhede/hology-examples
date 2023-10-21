@@ -29,7 +29,7 @@ function App() {
   useEffect(() => {
     initiateGame(Game, {
       element: containerRef.current as HTMLElement,
-      sceneName: "demo",
+      sceneName: "boxes",
       dataDir: "data",
       shaders,
       actors,
@@ -57,7 +57,7 @@ class Game {
   }
 
   async start() {
-    this.physics.showDebug = false
+    this.physics.showDebug = true
 
     const spawnPoint = this.world.findActorByType(SpawnPoint)
     spawnPoint.position.y += 1
@@ -71,17 +71,6 @@ class Game {
     console.log(this.world.scene)
 
     const tv = this.world.findActorByType(TriggerVolume)
-/*
-    this.physics.onBeginOverlapWithActor(character, tv).subscribe(c => {
-      console.log('entered', c)
-    })
-
-    this.physics.onEndOverlapWithActorType(character, TriggerVolume).subscribe(c => {
-      console.log('exited', c)
-    })*/
-
-    //setInterval(() => character.shoot(), 50)
-
   }
 }
 
