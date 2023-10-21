@@ -6,6 +6,7 @@ export default function Instructions() {
 
     return (
         <div className="panel" style={{
+            color: '#ffffff',
             position: 'absolute',
             bottom: '10px',
             right: '10px',
