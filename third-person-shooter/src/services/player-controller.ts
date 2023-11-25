@@ -24,11 +24,10 @@ enum InputAction {
 
 @Service()
 class PlayerController {
-  private inputService = inject(InputService) // maybe support multple input services
+  private inputService = inject(InputService)
   private character: CharacterActor
 
   public start() {
-    // TODO Add a mouse click feature
     this.inputService.setKeybind(InputAction.jump, new Keybind(" "))
     this.inputService.setKeybind(InputAction.sprint, new Keybind("Shift"))
     this.inputService.setKeybind(InputAction.moveForward, new Keybind("w"))
@@ -47,9 +46,10 @@ class PlayerController {
       InputAction.zoomCamera,
       new Wheelbind(0.0003, false)
     )
+    this.inputService.setKeybind(InputAction.shoot, new Keybind('MouseLeft'))
   }
 
-  public posess(character: CharacterActor) {
+  public setup(character: CharacterActor) {
     this.character = character
     this.bindCharacterInput()
   }
@@ -59,42 +59,27 @@ class PlayerController {
     const playerJump = this.character.movement.jumpInput
     const playerSprint = this.character.movement.sprintInput
 
-    this.inputService.bind(InputAction.jump, playerJump.toggle)
-    this.inputService.bind(InputAction.sprint, playerSprint.toggle)
-    this.inputService.bind(InputAction.moveForward, playerMove.togglePositiveY)
-    this.inputService.bind(InputAction.moveBackward, playerMove.toggleNegativeY)
-    this.inputService.bind(InputAction.moveLeft, playerMove.toggleNegativeX)
-    this.inputService.bind(InputAction.moveRight, playerMove.togglePositiveX)
-    this.inputService.bind(
+    this.inputService.bindToggle(InputAction.jump, playerJump.toggle)
+    this.inputService.bindToggle(InputAction.sprint, playerSprint.toggle)
+    this.inputService.bindToggle(InputAction.moveForward, playerMove.togglePositiveY)
+    this.inputService.bindToggle(InputAction.moveBackward, playerMove.toggleNegativeY)
+    this.inputService.bindToggle(InputAction.moveLeft, playerMove.toggleNegativeX)
+    this.inputService.bindToggle(InputAction.moveRight, playerMove.togglePositiveX)
+    this.inputService.bindDelta(
       InputAction.rotate,
       this.character.movement.rotationInput.rotateY
     )
-    this.inputService.bind(
+    this.inputService.bindDelta(
       InputAction.rotateCamera,
       this.character.thirdPartyCamera.rotationInput.rotateX
     )
-    this.inputService.bind(
+    this.inputService.bindDelta(
       InputAction.zoomCamera,
       this.character.thirdPartyCamera.zoomInput.increment
     )
+    this.inputService.bindToggle(InputAction.shoot, this.character.shootAction.toggle)
 
-    document.addEventListener("mousedown", (event) => {
-      if (event.button === leftMouseButton && this.character.thirdPartyCamera.isMouseLocked) {
-        this.character.startShooting()
-      }
-    })
-
-    document.addEventListener("mouseup", (event) => {
-      if (
-        event.button === leftMouseButton &&
-        this.character.thirdPartyCamera.isMouseLocked
-      ) {
-        this.character.stopShoot()
-      }
-    })
   }
 }
-
-const leftMouseButton = 0
 
 export default PlayerController

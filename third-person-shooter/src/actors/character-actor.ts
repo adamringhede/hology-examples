@@ -2,69 +2,144 @@ import {
   Actor, AnimationState,
   AnimationStateMachine, attach, BaseActor,
   inject,
-  PhysicsSystem, RootMotionClip, ViewController, World
+  PhysicsSystem, RootMotionClip, ViewController
 } from "@hology/core/gameplay";
 import {
   CharacterAnimationComponent,
   CharacterMovementComponent,
+  CharacterMovementMode,
   MeshComponent,
   ThirdPartyCameraComponent
 } from "@hology/core/gameplay/actors";
+import * as THREE from 'three';
 import { AnimationClip, Bone, Loader, Mesh, MeshStandardMaterial, Object3D, Vector3 } from 'three';
 import { FBXLoader } from "../three/FBXLoader";
-import { GLTFLoader } from '../three/GLTFLoader'
-import * as THREE from 'three'
+import { GLTFLoader } from '../three/GLTFLoader';
 import ShootingComponent from "./shooting-component";
-import { PhysicalShapeMesh } from "@hology/core";
-
-enum MovementMode {
-  walking = 0,
-  swimming = 1,
-  falling = 2,
-  flying = 3
-}
+import { ActionInput } from "@hology/core/gameplay/input";
 
 
 @Actor()
 class CharacterActor extends BaseActor {
-  private physicsSystem = inject(PhysicsSystem)
-  private shooting = attach(ShootingComponent)
-  private height = 2.5
-  private radius = 1.6
-  private isCrouching = false
-
   private viewController = inject(ViewController)
 
+  private shooting = attach(ShootingComponent)
   private animation = attach(CharacterAnimationComponent)
-
-  mesh = attach(MeshComponent)
-  thirdPartyCamera: ThirdPartyCameraComponent = attach(ThirdPartyCameraComponent)
-
-  public readonly movement = attach(CharacterMovementComponent, {
+  public movement = attach(CharacterMovementComponent, {
     maxSpeed: 6,
     maxSpeedSprint: 14,
     maxSpeedBackwards: 4,
     snapToGround: 0.3,
     autoStepMaxHeight: 0.7,
-
-  /*  autoStepMaxHeight: 0,
-    autoStepMinWidth: 0,
-    colliderHeight: 2.2,
-    colliderRadius: .6,
-    minSlopeSlideAngle: THREE.MathUtils.degToRad(70),
-    maxSlopeClimbAngle: THREE.MathUtils.degToRad(70),
-    maxSpeed: 5,
-    maxSpeedBackwards: 3,
-    maxSpeedSprint: 7,*/
     fallingReorientation: true,
     fallingMovementControl: 0.2
   })
+  public thirdPartyCamera: ThirdPartyCameraComponent = attach(ThirdPartyCameraComponent)
 
-  constructor() {
-    super()
-    this.physicsSystem.showDebug = false
+
+  public shootAction = new ActionInput()
+
+  private muzzleObject: Object3D
+
+  async onInit(): Promise<void> {
+    this.shooting.camera = this.thirdPartyCamera.camera.instance
+    this.shootAction.onStart(() => {
+      console.log("shoot")
+      this.shoot()
+    })
+
+    // TODO Use the default loaders instead.
+    const loader = new FBXLoader()
+    const glbLoader = new GLTFLoader()
+
+    const characterMeshPath = 'assets/X Bot.fbx'
+    const mesh = await loader.loadAsync(characterMeshPath) as unknown as Mesh
+
+    const weaponMeshGroup = (await glbLoader.loadAsync('assets/weapon.glb')).scene as THREE.Group
+    // Why am I doing this? Maybe just fix the mesh instaed.
+    weaponMeshGroup.children.shift() // Remove first armature
+    // TODO Change gltf loader to be able to exclude armatures
+    const weaponMesh = weaponMeshGroup
+    weaponMesh.scale.multiplyScalar(20)
+
+    let handBone: Object3D
+    mesh.traverse(o => {
+      if (o.name.includes('mixamorigRightHand') && handBone == null) {
+        handBone = o
+      }
+    })
+    handBone.add(weaponMesh)
+
+    weaponMesh.traverse(o => {
+      if (o.name === 'SO_Muzzle') {
+        this.muzzleObject = o
+      }
+    })
+
+    const characterMaterial = new MeshStandardMaterial({color: 0x999999})
+    mesh.traverse(o => {
+      if (o instanceof Mesh) {
+        o.material = characterMaterial
+        o.castShadow = true
+      }
+    })
+    
+    const sm = await this.createGraph(loader, mesh)
+    
+    this.animation.playStateMachine(sm)
+    this.animation.setup(mesh, [findBone(mesh, "mixamorigSpine2")])
+    
+    this.viewController.onUpdate(this).subscribe(deltaTime => {
+      // TODO Does this need to hapen per frame? Actually should happen after the movement controller has been
+      // updated. I wonder if relying on events like this is good or if explicit update calls 
+      // would make it easier to debug and understand code. Also could lead to less bugs 
+      // also should happen before tha animation is updated
+      // subscriptions are meant for streams of data rather than synchronous updates.
+      // i think it might be bad to be so reliant on it.
+
+      // In order to syncronise the walking animation with the speed of the character,
+      // we can pass the movement speed from the movement component to the animation component.
+      // Because we are also scaling our mesh, we need to factor this in. 
+      this.animation.movementSpeed = this.movement.horizontalSpeed / mesh.scale.x
+    })
+
+    const spineBone = findBone(mesh, "mixamorigSpine1")
+
+    // TODO Have an event triggered for after animation. This could also be done 
+    // if I have some update function or the tick function itself can 
+    // take a parameter. Something like late update could be used
+    // TODO should be possible to register listeneres for these events
+    // in such a way. Maybe make tick a function like onTick that 
+    // takes the actor.
+    // This would also allow the view controller to potentially skips 
+    // calling tick on actors that are deemed to far away. 
+    // it could also reduce the frequency it is called based on distance
+    // Another l
+    this.viewController.onUpdate(this).subscribe(deltaTime => {
+      if (this.movement.mode !== CharacterMovementMode.falling) {
+        const meshWorldRotation = this.container.getWorldQuaternion(new THREE.Quaternion())
+        const worldRotation = spineBone.getWorldQuaternion(new THREE.Quaternion())
+        // Todo this vector should not be defined every time. 
+        const axis = new Vector3(-1,0,0).normalize()
+        axis.applyQuaternion(worldRotation.invert().multiply(meshWorldRotation))
+        spineBone.rotateOnAxis(axis, Math.asin(-this.thirdPartyCamera.rotationInput.rotation.x))
+      }
+    })
+
+    // Need a way to play just the reload animation
+    // When running out of ammo, reload or whenever the player clicks reload
+  /*  const reloadClip = RootMotionClip.fromClip(clips.reload)
+    reloadClip.fixedInPlace = false
+    reloadClip.duration -= 1 // Cut off the end of it 
+    setInterval(() => {
+      //this.animation.playUpper(reloadClip, {priority: 5, loop: false})
+    }, 6000)*/
+
+    const meshRescaleFactor = 1/50
+    mesh.scale.multiplyScalar(meshRescaleFactor)
+    this.container.add(mesh)
+
   }
-
 
   private async createGraph(loader: FBXLoader, mesh: Object3D) {
     const clips = await loadClips(loader, {
@@ -88,191 +163,67 @@ class CharacterActor extends BaseActor {
       throw new Error("No root bone found in mesh")
     }
   
-    const makeSm = () => {
-
-      const grounded = new AnimationState(clips.idle).named("grounded")
-      const groundMovement = grounded.createChild(null, () => this.movement.horizontalSpeed > 0 && this.movement.mode == MovementMode.walking)
-      const [sprint, walk] = groundMovement.split(() => this.movement.isSprinting)      
-
-      const walkForward = walk.createChild(RootMotionClip.fromClip(clips.walking, true), () => this.movement.directionInput.vertical > 0).named("walk forward")
-      walkForward.createChild(RootMotionClip.fromClip(clips.walkForwardLeft, true), () => this.movement.directionInput.horizontal < 0)
-      walkForward.createChild(RootMotionClip.fromClip(clips.walkForwardRight, true), () => this.movement.directionInput.horizontal > 0)
-
-      walk.createChild(RootMotionClip.fromClip(clips.walkingBackwards, true), () => this.movement.directionInput.vertical < 0)
-
-      const strafe = walk.createChild(null, () => this.movement.directionInput.vertical == 0).named("abstract strafe")
-      strafe.createChild(RootMotionClip.fromClip(clips.strafeLeft, true), () => this.movement.directionInput.horizontal < 0)
-      strafe.createChild(RootMotionClip.fromClip(clips.strafeRight, true), () => this.movement.directionInput.horizontal > 0)
-      
-      const fall = new AnimationState(clips.falling).named("fall")
-      grounded.transitionsTo(fall, () => this.movement.mode === MovementMode.falling)
-
-      const land = new AnimationState(clips.land)
-
-      fall.transitionsTo(grounded, () => this.movement.mode !== MovementMode.falling && this.movement.directionInput.vector.length() > 0)
-      fall.transitionsTo(land, () => this.movement.mode !== MovementMode.falling && this.movement.directionInput.vector.length() == 0)
-      land.transitionsOnComplete(grounded, () => 
-        this.movement.mode === MovementMode.falling || this.movement.directionInput.vector.length() > 0)
-
-      const runForward = sprint.createChild(RootMotionClip.fromClip(clips.run, true), () => this.movement.directionInput.vertical > 0).named("sprint forward")
-      runForward.createChild(RootMotionClip.fromClip(clips.walkForwardLeft, true), () => this.movement.directionInput.horizontal < 0)
-      runForward.createChild(RootMotionClip.fromClip(clips.walkForwardRight, true), () => this.movement.directionInput.horizontal > 0)
-      sprint.createChild(RootMotionClip.fromClip(clips.walkingBackwards, true), () => this.movement.directionInput.vertical < 0).named("sprint back")
-      // This is a shortcut to reuse another state. This should be used with caution though as it may not have expected results
-      sprint.transitionsTo(strafe)
-      //sprint.transitionsTo(strafeLeft, () => this.movement.directionInput.horizontal < 0)
-      //sprint.transitionsTo(strafeRight, () => this.movement.directionInput.horizontal > 0)
-
-      return new AnimationStateMachine(grounded)
-    }
-    return {sm: makeSm(), clips}
+    return this.createStateMachine(clips)
   }
 
-  private world = inject(World)
-  private muzzleObject: Object3D
+  private createStateMachine(clips: Record<string, AnimationClip>) {
 
-  async onInit(): Promise<void> {
-    // Using draco compression can reduce the file size by 2x
-    //const dracoLoader = new DRACOLoader();
-    //dracoLoader.setDecoderPath('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/js/libs/draco/'); // use a full url path
+    const grounded = new AnimationState(clips.idle).named("grounded")
+    const groundMovement = grounded.createChild(null, () => this.movement.horizontalSpeed > 0 && this.movement.mode == CharacterMovementMode.walking)
+    const [sprint, walk] = groundMovement.split(() => this.movement.isSprinting)      
 
-    const loader = new FBXLoader()
-    const glbLoader = new GLTFLoader()
-    //glbLoader.setDRACOLoader(dracoLoader);
+    const walkForward = walk.createChild(RootMotionClip.fromClip(clips.walking, true), () => this.movement.directionInput.vertical > 0).named("walk forward")
+    walkForward.createChild(RootMotionClip.fromClip(clips.walkForwardLeft, true), () => this.movement.directionInput.horizontal < 0)
+    walkForward.createChild(RootMotionClip.fromClip(clips.walkForwardRight, true), () => this.movement.directionInput.horizontal > 0)
 
-    const characterMeshPath = 'assets/X Bot.fbx'
-    //const mesh = (await glbLoader.loadAsync('assets/X Bot compressed.glb')).scene as unknown as Mesh
-    const mesh = await loader.loadAsync(characterMeshPath) as unknown as Mesh
+    walk.createChild(RootMotionClip.fromClip(clips.walkingBackwards, true), () => this.movement.directionInput.vertical < 0)
 
-    const weaponMeshGroup = (await glbLoader.loadAsync('assets/weapon.glb')).scene as THREE.Group
-    weaponMeshGroup.children.shift() // Remove first armature
-    // TODO Change gltf loader to be able to exclude armatures
-    const weaponMesh = weaponMeshGroup
-
-    //this.world.scene.add(weaponMesh)
-  
-    //mesh.rotateY(Math.PI)
+    // todo have a method for creating an abstract node or group node.
+    const strafe = walk.createChild(null, () => this.movement.directionInput.vertical == 0).named("abstract strafe")
+    // Maybe use another name instead of boolean. 
+    // Fixed in place argument name is confusing. Also add documentation to all parameters.
+    // TODO Don't rely on direction input for this. Use the actual state of the character for animations
+    // The intent of the player should not drive the animation but rahter tha movement's actual state. 
+    strafe.createChild(RootMotionClip.fromClip(clips.strafeLeft, true), () => this.movement.directionInput.horizontal < 0)
+    strafe.createChild(RootMotionClip.fromClip(clips.strafeRight, true), () => this.movement.directionInput.horizontal > 0)
     
-    weaponMesh.scale.multiplyScalar(20)
+    const fall = new AnimationState(clips.falling).named("fall")
+    grounded.transitionsTo(fall, () => this.movement.mode === CharacterMovementMode.falling)
 
-    let handBone: Object3D
-    mesh.traverse(o => {
-      if (o.name.includes('mixamorigRightHand') && handBone == null) {
-        handBone = o
-      }
-    })
-    handBone.add(weaponMesh)
+    const land = new AnimationState(clips.land)
 
-    weaponMesh.traverse(o => {
-      if (o.name === 'SO_Muzzle') {
-        this.muzzleObject = o
+    fall.transitionsTo(grounded, () => this.movement.mode !== CharacterMovementMode.falling && this.movement.directionInput.vector.length() > 0)
+    fall.transitionsTo(land, () => this.movement.mode !== CharacterMovementMode.falling && this.movement.directionInput.vector.length() == 0)
+    land.transitionsOnComplete(grounded, () => 
+    // I am confused by this. Why check if falling 
+    // TODO Landing should be additive so that it can be added to whatever whatever animation happens. 
+    // This can maybe be done by using a more comlex animation state.
+    // It will not just be one clip but potentially multiple clips that can dynamically
+    // be created based on state and combine multiple clips with a weight, sequence of clips, etc. 
+      this.movement.mode === CharacterMovementMode.falling || this.movement.directionInput.vector.length() > 0)
 
-      }
-    })
-    
+    const runForward = sprint.createChild(RootMotionClip.fromClip(clips.run, true), () => this.movement.directionInput.vertical > 0).named("sprint forward")
+    runForward.createChild(RootMotionClip.fromClip(clips.walkForwardLeft, true), () => this.movement.directionInput.horizontal < 0)
+    runForward.createChild(RootMotionClip.fromClip(clips.walkForwardRight, true), () => this.movement.directionInput.horizontal > 0)
+    sprint.createChild(RootMotionClip.fromClip(clips.walkingBackwards, true), () => this.movement.directionInput.vertical < 0).named("sprint back")
+    // This is a shortcut to reuse another state. This should be used with caution though as it may not have expected results
+    sprint.transitionsTo(strafe)
+    //sprint.transitionsTo(strafeLeft, () => this.movement.directionInput.horizontal < 0)
+    //sprint.transitionsTo(strafeRight, () => this.movement.directionInput.horizontal > 0)
 
-
-    const characterMaterial = new MeshStandardMaterial({color: 0x999999})
-    mesh.traverse(o => {
-      if (o instanceof Mesh) {
-        o.material = characterMaterial
-        o.castShadow = true
-      }
-    })
-    
-    const meshRescaleFactor = 1/50
-    mesh.scale.multiplyScalar(meshRescaleFactor)
-
-    const {sm, clips} = await this.createGraph(loader, mesh)
-    
-    this.animation.playStateMachine(sm)
-    this.animation.setup(mesh, [findBone(mesh, "mixamorigSpine2")])
-    
-    this.viewController.tick.subscribe(deltaTime => {
-      this.animation.movementSpeed = this.movement.horizontalSpeed / mesh.scale.x
-    })
-
-    const spineBone = findBone(mesh, "mixamorigSpine1")
-
-    // An improvement could be to apply the rotation to a chain of bones uniformly 
-    // to get a smoother curve of the upper body
-
-    // This should happen after animation is updated. I am just lucky that it works here
-    let elapsedTime = 0
-    this.viewController.tick.subscribe(deltaTime => {
-      elapsedTime += deltaTime
-      if (this.movement.mode !== MovementMode.falling) {
-        const meshWorldRotation = this.container.getWorldQuaternion(new THREE.Quaternion())
-        const worldRotation = spineBone.getWorldQuaternion(new THREE.Quaternion())
-        const axis = new Vector3(-1,0,0).normalize()
-        axis.applyQuaternion(worldRotation.invert().multiply(meshWorldRotation))
-        //const rotation = Math.PI * Math.sin(elapsedTime) * 0.5
-        spineBone.rotateOnAxis(axis, Math.asin(-this.thirdPartyCamera.rotationInput.rotation.x))
-      }
-
-    })
-
-    // Need a way to play just the reload animation
-    // When running out of ammo, reload or whenever the player clicks reload
-    const reloadClip = RootMotionClip.fromClip(clips.reload)
-    reloadClip.fixedInPlace = false
-    reloadClip.duration -= 1 // Cut off the end of it 
-    setInterval(() => {
-      //this.animation.playUpper(reloadClip, {priority: 5, loop: false})
-    }, 6000)
-
-    this.mesh.replaceMesh(mesh as unknown as Mesh)
-
-    setInterval(() => {
-      // Need to run after the movement component is initiated is run
-      // I should change it to not override 
-      //this.movement.autoStepMinWidth = 0.002
-      //this.movement.snapToGround = 0.3
-      //this.movement.autoStepMaxHeight = 0.2
-      //this.movement['cc'].setMinSlopeSlideAngle(THREE.MathUtils.degToRad(80))
-      //this.movement['cc'].setMaxSlopeClimbAngle(THREE.MathUtils.degToRad(100))
-    }, 100)
+    return new AnimationStateMachine(grounded)
   }
-
-  private isShooting = false
-  private shootInterval
-
 
   shoot() {
-    this.shooting.camera = this.thirdPartyCamera.camera.instance
     this.muzzleObject.getWorldPosition(ballWorldPosition)
     this.shooting.trigger(ballWorldPosition)
   }
 
-  startShooting() {
-    if (this.movement.mode === MovementMode.walking) {
-      this.isShooting = true
-      this.shoot()
-      this.shootInterval = setInterval(() => {
-        this.shooting.camera = this.thirdPartyCamera.camera.instance
-        this.muzzleObject.getWorldPosition(ballWorldPosition)
-        this.shooting.trigger(ballWorldPosition)
-        if (this.movement.mode !== MovementMode.walking) {
-          this.stopShoot()
-        }
-      }, 600)
-    }
-  }
-
-  stopShoot() {
-    this.isShooting = false
-    clearInterval(this.shootInterval)
-  }
-
-  moveTo(position: Vector3) {
-    this.container.position.copy(position)
-    this.physicsSystem.updateActorTransform(this)
-  }
 }
 
-const ballWorldPosition = new Vector3()
 export default CharacterActor
 
+const ballWorldPosition = new Vector3()
 
 /**
  * Use something similar to this that also works with assets.
@@ -296,8 +247,6 @@ async function loadClips<T extends {[name: string]: string}>(loader: Loader, pat
   const entries = await Promise.all(Object.entries(paths).map(([name, path]) => Promise.all([name, getClip(path, loader)])))
   return Object.fromEntries(entries) as {[Property in keyof T]: AnimationClip}
 }
-
-
 
 function findBone(object: Object3D, name: string): Bone {
   let found: Bone

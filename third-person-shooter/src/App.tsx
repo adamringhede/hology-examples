@@ -1,5 +1,6 @@
 import "./App.css"
 import {
+  GameInstance,
   initiateGame,
   inject,
   PhysicsSystem,
@@ -8,7 +9,7 @@ import {
   World,
 } from "@hology/core/gameplay"
 import { createRef, useEffect } from "react"
-import shaders from "./materials"
+import shaders from "./shaders"
 import { SpawnPoint } from "@hology/core/gameplay/actors"
 import CharacterActor from "./actors/character-actor"
 import {
@@ -24,6 +25,7 @@ import { Pane } from "tweakpane"
 import actors from './actors'
 import { TriggerVolume } from "@hology/core/gameplay/actors"
 import Instructions from "./Instructions"
+import Game from "./services/game"
 
 function App() {
   const containerRef = createRef<HTMLDivElement>()
@@ -45,72 +47,3 @@ function App() {
 }
 
 export default App
-
-@Service()
-class Game {
-  private world = inject(World)
-  private viewController = inject(ViewController)
-  private physics = inject(PhysicsSystem)
-  private inputService = inject(InputService)
-  private playerController = inject(PlayerController)
-
-  constructor() {
-    this.start()
-  }
-
-  async start() {
-    this.physics.showDebug = false
-
-    const spawnPoint = this.world.findActorByType(SpawnPoint)
-    spawnPoint.position.y += 1
-
-    const character = await this.world.spawnActor(CharacterActor, spawnPoint.position)
-    //character.moveTo(spawnPoint.position)
-    this.inputService.start()
-    this.playerController.posess(character)
-    this.playerController.start()
-
-    const tv = this.world.findActorByType(TriggerVolume)
-  }
-}
-
-function setUpPane(character: CharacterActor) {
-
-  const PARAMS = {
-    autoStepMaxHeight: character.movement.autoStepMaxHeight,
-    autoStepMinWidth: character.movement.autoStepMinWidth,
-    snapToGround: character.movement.snapToGround,
-    shadowBias: 0
-  };
-  const pane = new Pane()
-  pane.addInput(PARAMS, 'autoStepMaxHeight', {
-    min: 0,
-    max: 1,
-  }).on('change', ev => {
-    character.movement.autoStepMaxHeight = ev.value as number
-  })
-  pane.addInput(PARAMS, 'autoStepMinWidth', {
-    min: 0,
-    max: 1, 
-  }).on('change', ev => {
-    character.movement.autoStepMinWidth = ev.value as number
-  })
-
-  pane.addInput(PARAMS, 'snapToGround', {
-    min: 0,
-    max: 2,
-  }).on('change', ev => {
-    character.movement.snapToGround = ev.value as number
-  })
-
-  pane.addInput(PARAMS, 'shadowBias', {
-    min: -.1,
-    max: .1
-  }).on('change', ev => {
-    this.viewController['view'].csm.shadowBias = ev.value
-    this.viewController['view'].csm.updateShadowBounds()
-    this.viewController['view'].csm.updateUniforms()
-    this.viewController['view'].csm.update()
-  })
-
-}

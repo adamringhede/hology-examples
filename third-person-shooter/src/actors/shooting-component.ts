@@ -18,7 +18,6 @@ import {
 } from "three"
 import BallActor from "./ball-actor"
 
-let count = 0
 const raycaster = new Raycaster()
 const screenCenter = { x: 0, y: 0 }
 
@@ -41,16 +40,13 @@ class ShootingComponent extends ActorComponent {
       return
     }
 
-    /*  const from = new Vector3()
-      .copy(this.actor.position)
-      .add(new Vector3(0, 2.5, 0))
-      */
-
     raycaster.setFromCamera(screenCenter, this.camera)
     raycaster.ray.origin
 
     const from = raycaster.ray.origin
     const to = from.clone().add(raycaster.ray.direction.multiplyScalar(100))
+
+    // TODO remove this part in the final shared version
 
     // Ray test to find the hit location
     // Raycasting from the camera should be a built in feature
@@ -63,22 +59,7 @@ class ShootingComponent extends ActorComponent {
     // The direction should be calculated based on (result.hitPoint ?? to - gun position)
     const ballFrom = position ?? from
 
-
-
-
     this.spawnBall(ballFrom, raycaster.ray.direction.normalize())
-    //console.log(++count)
-    /**
-     * TODO
-     *
-     * Create a ball that is shot from the player's gun towards the position
-     * using physics. It should be able to collide with objects which moves them.
-     * This should be a more fun and intriguing experience that also looks impressive.
-     */
-
-    // Bullet traces should origin from the gun to the hit location
-
-    //this.addHitMarker(result)
   }
 
   private async spawnBall(start: Vector3, direction: Vector3) {
