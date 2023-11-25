@@ -2,21 +2,20 @@ import {
   Actor, AnimationState,
   AnimationStateMachine, attach, BaseActor,
   inject,
-  PhysicsSystem, RootMotionClip, ViewController
+  RootMotionClip, ViewController
 } from "@hology/core/gameplay";
 import {
   CharacterAnimationComponent,
   CharacterMovementComponent,
   CharacterMovementMode,
-  MeshComponent,
   ThirdPartyCameraComponent
 } from "@hology/core/gameplay/actors";
+import { ActionInput } from "@hology/core/gameplay/input";
 import * as THREE from 'three';
 import { AnimationClip, Bone, Loader, Mesh, MeshStandardMaterial, Object3D, Vector3 } from 'three';
-import { FBXLoader } from "../three/FBXLoader";
-import { GLTFLoader } from '../three/GLTFLoader';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import ShootingComponent from "./shooting-component";
-import { ActionInput } from "@hology/core/gameplay/input";
 
 
 @Actor()
@@ -44,7 +43,6 @@ class CharacterActor extends BaseActor {
   async onInit(): Promise<void> {
     this.shooting.camera = this.thirdPartyCamera.camera.instance
     this.shootAction.onStart(() => {
-      console.log("shoot")
       this.shoot()
     })
 
@@ -235,12 +233,18 @@ const ballWorldPosition = new Vector3()
  */
 
 async function getClip(file: string, loader: Loader, name?: string) {
-  const group = await loader.loadAsync(file)
-  const clips = group.animations as AnimationClip[]
-  if (name != null) {
-    return clips.find(c => c.name === 'name')
+  try {
+    const group = await loader.loadAsync(file)
+    const clips = group.animations as AnimationClip[]
+    if (name != null) {
+      return clips.find(c => c.name === 'name')
+    }
+    return clips[0]
+  } catch (e) {
+    debugger
+    return null;
   }
-  return clips[0]
+
 }
 
 async function loadClips<T extends {[name: string]: string}>(loader: Loader, paths: T): Promise<{[Property in keyof T]: AnimationClip}>  {
