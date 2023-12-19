@@ -1,6 +1,6 @@
 import {
   Actor, AnimationState,
-  AnimationStateMachine, attach, BaseActor,
+  AnimationStateMachine, AssetLoader, attach, BaseActor,
   inject,
   RootMotionClip, ViewController
 } from "@hology/core/gameplay";
@@ -21,6 +21,7 @@ import ShootingComponent from "./shooting-component";
 @Actor()
 class CharacterActor extends BaseActor {
   private viewController = inject(ViewController)
+  private assetLoader = inject(AssetLoader)
 
   private shooting = attach(ShootingComponent)
   private animation = attach(CharacterAnimationComponent)
@@ -51,9 +52,9 @@ class CharacterActor extends BaseActor {
     const glbLoader = new GLTFLoader()
 
     const characterMeshPath = 'assets/X Bot.fbx'
-    const mesh = await loader.loadAsync(characterMeshPath) as unknown as Mesh
+    const mesh = await this.assetLoader.getModelAtPath(characterMeshPath)
 
-    const weaponMeshGroup = (await glbLoader.loadAsync('assets/weapon.glb')).scene as THREE.Group
+    const weaponMeshGroup = (await this.assetLoader.geGltfAtPath('assets/weapon.glb')).scene as THREE.Group
     // Why am I doing this? Maybe just fix the mesh instaed.
     weaponMeshGroup.children.shift() // Remove first armature
     // TODO Change gltf loader to be able to exclude armatures
@@ -113,16 +114,6 @@ class CharacterActor extends BaseActor {
     // calling tick on actors that are deemed to far away. 
     // it could also reduce the frequency it is called based on distance
     // Another l
-    this.viewController.onUpdate(this).subscribe(deltaTime => {
-      if (this.movement.mode !== CharacterMovementMode.falling) {
-        const meshWorldRotation = this.container.getWorldQuaternion(new THREE.Quaternion())
-        const worldRotation = spineBone.getWorldQuaternion(new THREE.Quaternion())
-        // Todo this vector should not be defined every time. 
-        const axis = new Vector3(-1,0,0).normalize()
-        axis.applyQuaternion(worldRotation.invert().multiply(meshWorldRotation))
-        spineBone.rotateOnAxis(axis, Math.asin(-this.thirdPartyCamera.rotationInput.rotation.x))
-      }
-    })
 
     // Need a way to play just the reload animation
     // When running out of ammo, reload or whenever the player clicks reload
@@ -135,14 +126,26 @@ class CharacterActor extends BaseActor {
 
     const meshRescaleFactor = 1/50
     mesh.scale.multiplyScalar(meshRescaleFactor)
-    this.container.add(mesh)
+    this.object.add(mesh)
 
+  }
+  
+  onLateUpdate(deltaTime: number): void {
+    const spineBone = findBone(this.object, "mixamorigSpine1")
+    if (this.movement.mode !== CharacterMovementMode.falling) {
+      const meshWorldRotation = this.object.getWorldQuaternion(new THREE.Quaternion())
+      const worldRotation = spineBone.getWorldQuaternion(new THREE.Quaternion())
+      // Todo this vector should not be defined every time. 
+      const axis = new Vector3(-1,0,0).normalize()
+      axis.applyQuaternion(worldRotation.invert().multiply(meshWorldRotation))
+      spineBone.rotateOnAxis(axis, Math.asin(-this.thirdPartyCamera.rotationInput.rotation.x))
+    }
   }
 
   private async createGraph(loader: FBXLoader, mesh: Object3D) {
-    const clips = await loadClips(loader, {
+    const clips = await loadClips(this.assetLoader, {
       run: 'assets/rifle run.fbx',
-      walking: 'assets/rifle walking.fbx',
+      walking: 'assets/walking.fbx',
       walkForwardLeft: 'assets/walk forward left.fbx',
       walkForwardRight: 'assets/walk forward right.fbx',
       walkingBackwards: 'assets/walking backwards.fbx',
@@ -232,10 +235,10 @@ const ballWorldPosition = new Vector3()
  * I could even use code generation to load it.
  */
 
-async function getClip(file: string, loader: Loader, name?: string) {
+async function getClip(file: string, assetLoader: AssetLoader, name?: string) {
   try {
-    const group = await loader.loadAsync(file)
-    const clips = group.animations as AnimationClip[]
+    const group = await assetLoader.getModelAtPath(file)
+    const clips = group.animations
     if (name != null) {
       return clips.find(c => c.name === 'name')
     }
@@ -247,8 +250,8 @@ async function getClip(file: string, loader: Loader, name?: string) {
 
 }
 
-async function loadClips<T extends {[name: string]: string}>(loader: Loader, paths: T): Promise<{[Property in keyof T]: AnimationClip}>  {
-  const entries = await Promise.all(Object.entries(paths).map(([name, path]) => Promise.all([name, getClip(path, loader)])))
+async function loadClips<T extends {[name: string]: string}>(assetLoader: AssetLoader, paths: T): Promise<{[Property in keyof T]: AnimationClip}>  {
+  const entries = await Promise.all(Object.entries(paths).map(([name, path]) => Promise.all([name, getClip(path, assetLoader)])))
   return Object.fromEntries(entries) as {[Property in keyof T]: AnimationClip}
 }
 

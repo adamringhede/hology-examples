@@ -30,13 +30,14 @@ import Game from "./services/game"
 function App() {
   const containerRef = createRef<HTMLDivElement>()
   useEffect(() => {
-    initiateGame(Game, {
+    const runtime = initiateGame(Game, {
       element: containerRef.current as HTMLElement,
       sceneName: "boxes",
       dataDir: "data",
       shaders,
       actors,
     })
+    return () => runtime.shutdown()
   }, [containerRef])
   return (
     <div className="App">

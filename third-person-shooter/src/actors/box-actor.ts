@@ -17,8 +17,8 @@ class BoxActor extends BaseActor {
   @Parameter()
   private color: Color = new Color(0x0000ff)
 
-  private mesh: MeshComponent = this.attach(MeshComponent, {
-    mesh: new PhysicalShapeMesh(
+  private mesh = this.attach(MeshComponent<PhysicalShapeMesh>, {
+    object: new PhysicalShapeMesh(
       new RoundedBoxGeometry(1, 1, 1, 4, 0.05),
       new MeshStandardMaterial({color: this.color}),
       new BoxCollisionShape(new Vector3(1,1,1)).withOffset(new Vector3(0, .5, 0)),
@@ -28,13 +28,13 @@ class BoxActor extends BaseActor {
   })
   
   onInit(): void | Promise<void> {
-    const material = this.mesh.mesh.material as MeshStandardMaterial
+    const material = this.mesh.object.material as MeshStandardMaterial
     if (this.color != null) {
       material.color.copy(this.color)
     }
-    this.mesh.mesh.castShadow = true
-    this.mesh.mesh.receiveShadow = true
-    this.mesh.mesh.geometry.translate(0,.5,0)
+    this.mesh.object.castShadow = true
+    this.mesh.object.receiveShadow = true
+    this.mesh.object.geometry.translate(0,.5,0)
   }
 
 }
